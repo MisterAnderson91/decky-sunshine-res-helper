@@ -4,7 +4,7 @@ This tool is designed to work alongside [decky-sunshine](https://github.com/s0t7
 It modifies your active display's EDID on-the-fly to perfectly match the client's resolution and refresh rate when streaming via Sunshine on SteamOS/Gamescope systems.
 It runs as a persistent daemon and automatically manages display connections by overriding EDID information and triggering Gamescope rescans.
 
-> ⚠️ Enable SSH before using this tool. If your display gets stuck, you can recover by running `sudo systemctl stop decky-sunshine-res-helper` or sending `--disconnect` to the socket.
+> ⚠️ If your monitor or TV screen ever gets stuck on "Invalid format" or similar, just hard reboot your device and it will clear the override.
 
 ## Requirements
 
