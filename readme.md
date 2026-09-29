@@ -15,7 +15,18 @@ It runs as a persistent daemon and automatically manages display connections by 
 
 ## Installation
 
-Clone the repo:
+The easiest way to install, update, or uninstall is by using the standalone AppImage installer in Desktop Mode.
+
+1. Download the latest `Decky_Sunshine_Res-Helper-x86_64.AppImage` from the **Releases** tab.
+2. Open your Downloads folder and double-click the `.AppImage` file to execute it.
+3. A graphical window will appear where you can simply click **Install / Update** or **Uninstall**.
+4. Clicking these buttons will spawn a terminal window to run the script, which will prompt you for your `sudo` password.
+
+> **Note on Passwords:** If you have never set a desktop password on your SteamOS device, you will need to do so before installing. Open the **Konsole** application, type `passwd`, and press Enter. Follow the prompts to create a password (the text you type will remain invisible for security).
+
+### Alternative Installation (from source)
+
+If you prefer to install manually, clone the repo:
 
 ```bash
 git clone https://github.com/MisterAnderson91/decky-sunshine-res-helper
@@ -42,7 +53,9 @@ journalctl -u decky-sunshine-res-helper -f
 
 ### Updating
 
-Pull the latest changes and re-run the install script:
+If using the AppImage, simply download the newer version and click **Install / Update**.
+
+If you installed from source, pull the latest changes and re-run the install script:
 
 ```bash
 git pull
@@ -52,6 +65,8 @@ sudo ./install.sh
 ## Configure Sunshine
 
 The daemon listens on a FIFO pipe at `~/.sunshine-res-helper.in`. Sunshine talks to it by echoing arguments to that file.
+
+*(Note: The installer automatically adds these commands to your Sunshine configuration file. They are listed below solely for reference in case you need to copy them manually.)*
 
 In Sunshine's **General** tab, set:
 

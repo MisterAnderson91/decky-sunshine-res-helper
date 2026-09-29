@@ -5,3 +5,9 @@ virt_display.state
 backups/
 original_edid.bin
 tv_edid.bin
+build_env/
+build/
+dist/
+AppDir/
+*.spec
+*.AppImage
