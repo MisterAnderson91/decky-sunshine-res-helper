@@ -71,10 +71,47 @@ echo ""
 echo "Done. Status:"
 systemctl status decky-sunshine-res-helper --no-pager || true
 
+echo "==> Configuring Sunshine global_prep_cmd..."
+python3 -c "
+import sys, json, os, re
+CONF_PATH = '/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/sunshine.conf'
+TARGET_HOME = sys.argv[1]
+MODE = sys.argv[2]
+if not os.path.exists(CONF_PATH):
+    print(f'Sunshine config not found at {CONF_PATH}, skipping automation.')
+    sys.exit(0)
+do_cmd = f'sh -c \"echo --connect,--width,\${{SUNSHINE_CLIENT_WIDTH}},--height,\${{SUNSHINE_CLIENT_HEIGHT}},--refresh-rate,\${{SUNSHINE_CLIENT_FPS}} > {TARGET_HOME}/.sunshine-res-helper.in && cat {TARGET_HOME}/.sunshine-res-helper.out\"'
+undo_cmd = f'sh -c \"echo --disconnect > {TARGET_HOME}/.sunshine-res-helper.in && cat {TARGET_HOME}/.sunshine-res-helper.out\"'
+our_cmd_obj = {'do': do_cmd, 'undo': undo_cmd}
+with open(CONF_PATH, 'r') as f: lines = f.readlines()
+new_lines = []
+found = False
+for line in lines:
+    if line.startswith('global_prep_cmd'):
+        found = True
+        match = re.match(r'global_prep_cmd\s*=\s*(.*)', line)
+        if match:
+            try: cmds = json.loads(match.group(1).strip())
+            except Exception: cmds = []
+            if not isinstance(cmds, list): cmds = []
+            cmds = [cmd for cmd in cmds if not (cmd.get('do') == do_cmd and cmd.get('undo') == undo_cmd)]
+            if MODE == 'install': cmds.append(our_cmd_obj)
+            if len(cmds) > 0: new_lines.append(f'global_prep_cmd = {json.dumps(cmds, separators=(\",\", \":\"))}\\n')
+        else: new_lines.append(line)
+    else: new_lines.append(line)
+if MODE == 'install' and not found:
+    if len(new_lines) > 0 and not new_lines[-1].endswith('\n'): new_lines[-1] += '\n'
+    new_lines.append(f'global_prep_cmd = {json.dumps([our_cmd_obj], separators=(\",\", \":\"))}\\n')
+with open(CONF_PATH, 'w') as f: f.writelines(new_lines)
+print(f'Successfully updated Sunshine config for {MODE}.')
+" "$TARGET_HOME" "install"
+
 echo ""
 echo "=================================================================="
 echo "Installation Complete!"
-echo "Please add the following to your Sunshine 'General' configuration:"
+echo "These commands are added automatically by the installer. They are"
+echo "provided here in case they weren't added automatically (or if you"
+echo "need to copy them manually):"
 echo ""
 echo "Do Command:"
 echo "sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS} > ${TARGET_HOME}/.sunshine-res-helper.in && cat ${TARGET_HOME}/.sunshine-res-helper.out\""
