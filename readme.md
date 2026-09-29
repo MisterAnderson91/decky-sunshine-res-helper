@@ -93,7 +93,7 @@ sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/
 
 ### On Sunshine Crash or Stop
 
-The daemon watches `sunshine.service` via the systemd DBus interface. When Sunshine's `ActiveState` becomes `inactive` or `failed`, the daemon automatically triggers a disconnect so the physical monitor's native EDID is restored without manual intervention. It also monitors Sunshine's logs to detect unexpected client network drops, automatically reverting the display after a 15-second timeout and reapplying it if the client reconnects.
+The daemon actively monitors Sunshine's logs and service status. If Sunshine crashes, stops, or a client network connection drops unexpectedly, the daemon automatically reverts the display after a 15-second timeout, instantly reapplying the custom resolution if the client reconnects.
 
 ### On System Sleep / Wake
 
