@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import urllib.request
 import json
+import ssl
 from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
@@ -25,7 +26,10 @@ class UpdateCheckerThread(QThread):
                 url, 
                 headers={"User-Agent": "Decky-Sunshine-Res-Helper-Updater"}
             )
-            with urllib.request.urlopen(req, timeout=4) as response:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=4, context=ctx) as response:
                 data = json.loads(response.read().decode())
                 latest_tag = data.get("tag_name", "").strip()
                 html_url = data.get("html_url", "").strip()
