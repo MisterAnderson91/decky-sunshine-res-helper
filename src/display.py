@@ -17,10 +17,69 @@ from src.drm import (
 
 log = logging.getLogger(__name__)
 from src.edid import create_edid, find_best_vic_resolution, get_pixel_clock_info
+from src import steam_resolution
 
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
+STEAM_RES_STATE_FILE = SCRIPT_DIR / "steam_resolution.state"
 
 target_user = "deck"
+
+
+def _override_steam_resolution() -> None:
+    """
+    Save Steam's current "Maximum Game Resolution" and set it to "Native".
+    Best-effort: any failure is logged and the display switch carries on.
+    """
+    try:
+        if STEAM_RES_STATE_FILE.exists():
+            # A previous session (e.g. before sleep / network drop / daemon restart) was never
+            # restored, so the file already holds the user's real setting — don't overwrite it
+            # with "Native".
+            saved = STEAM_RES_STATE_FILE.read_text().strip()
+            log.info(f"  Steam Maximum Game Resolution already saved as '{saved}' — keeping it")
+        else:
+            current = steam_resolution.read_global_resolution(target_user)
+            if current is None:
+                log.error("  Could not read Steam Maximum Game Resolution — leaving it unchanged")
+                return
+            _ = STEAM_RES_STATE_FILE.write_text(current + "\n")
+            log.info(f"  ✓ Saved Steam Maximum Game Resolution: '{current}'")
+            if current == "Native":
+                log.info("  Steam Maximum Game Resolution is already 'Native'")
+                return
+
+        if steam_resolution.write_global_resolution("Native", target_user):
+            log.info("  ✓ Set Steam Maximum Game Resolution to 'Native'")
+        else:
+            log.error("  Could not set Steam Maximum Game Resolution to 'Native' — continuing")
+    except Exception as exc:
+        log.error(f"  Error while overriding Steam Maximum Game Resolution: {exc} — continuing")
+
+
+def _restore_steam_resolution() -> None:
+    """
+    Restore the "Maximum Game Resolution" saved by _override_steam_resolution().
+    Best-effort: on failure the state file is kept so a later disconnect can retry.
+    """
+    try:
+        if not STEAM_RES_STATE_FILE.exists():
+            return
+        saved = STEAM_RES_STATE_FILE.read_text().strip()
+        if not saved:
+            log.error("  Saved Steam Maximum Game Resolution is empty — discarding")
+            STEAM_RES_STATE_FILE.unlink()
+            return
+
+        if steam_resolution.write_global_resolution(saved, target_user):
+            STEAM_RES_STATE_FILE.unlink()
+            log.info(f"  ✓ Restored Steam Maximum Game Resolution to '{saved}'")
+        else:
+            log.error(
+                f"  Could not restore Steam Maximum Game Resolution to '{saved}' — "
+                f"kept in {STEAM_RES_STATE_FILE} for the next attempt"
+            )
+    except Exception as exc:
+        log.error(f"  Error while restoring Steam Maximum Game Resolution: {exc} — continuing")
 
 def _get_target_uid() -> int:
     import pwd
@@ -101,6 +160,10 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
     else:
         log.warning(f"  No original EDID found for {active_port} and no tv_edid.bin fallback exists!")
 
+    # Step 4b: Save Steam's Maximum Game Resolution and switch it to Native
+    log.info("Step 4b: Saving Steam Maximum Game Resolution and setting it to 'Native'...")
+    _override_steam_resolution()
+
     # Step 5: Drop EDID cache by forcing disconnect
     log.info(f"Step 5: Forcing disconnect on ({active_port})...")
     status_path = f"/sys/class/drm/{card_name}-{active_port}/status"
@@ -132,10 +195,12 @@ def disconnect() -> bool:
     log.info("Reverting display resolution override...")
     state_file = SCRIPT_DIR / "virt_display.state"
     if not state_file.exists():
+        _restore_steam_resolution()
         return False
 
     state_data = state_file.read_text().strip().split("\n")
     if len(state_data) < 2:
+        _restore_steam_resolution()
         return False
 
     card_name = state_data[0]
@@ -169,6 +234,9 @@ def disconnect() -> bool:
     time.sleep(1.0)
     target_uid = _get_target_uid()
     _ = run_command(f"sudo -u {target_user} XDG_RUNTIME_DIR=/run/user/{target_uid} gamescopectl backend_set_dirty")
+
+    log.info("Step 4: Restoring Steam Maximum Game Resolution...")
+    _restore_steam_resolution()
 
     state_file.unlink()
     log.info("✓ Display resolution reverted!")
