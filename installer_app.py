@@ -36,8 +36,16 @@ class UpdateCheckerThread(QThread):
                 
                 compare_tag = latest_tag[1:] if latest_tag.startswith("v") else latest_tag
                 
-                if latest_tag and self.current_version != "DEV" and compare_tag > self.current_version:
-                    self.update_checked.emit(latest_tag, html_url)
+                if latest_tag and self.current_version != "DEV":
+                    try:
+                        latest_parts = tuple(map(int, compare_tag.split(".")))
+                        current_parts = tuple(map(int, self.current_version.split(".")))
+                        is_newer = latest_parts > current_parts
+                    except ValueError:
+                        is_newer = compare_tag > self.current_version
+                        
+                    if is_newer:
+                        self.update_checked.emit(latest_tag, html_url)
         except Exception:
             pass
 
@@ -65,11 +73,6 @@ class InstallerApp(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(title_label)
         
-        rc_label = QLabel("Release Candidate 4")
-        rc_label.setStyleSheet("color: #aaaaaa; font-style: italic;")
-        rc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(rc_label)
-        
         desc_label = QLabel("Install, Update, or Uninstall the Res-Helper service.\nRequires root privileges.")
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
@@ -83,7 +86,7 @@ class InstallerApp(QMainWindow):
         
         self.adv_btn = QPushButton("⚙️ Advanced Options")
         self.adv_btn.setCheckable(True)
-        self.adv_btn.setStyleSheet("text-align: left; padding: 5px;")
+        self.adv_btn.setStyleSheet("text-align: center; padding: 5px;")
         
         self.adv_widget = QWidget()
         adv_layout = QVBoxLayout(self.adv_widget)
