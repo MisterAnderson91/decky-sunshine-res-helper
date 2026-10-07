@@ -294,7 +294,7 @@ class InstallerApp(QMainWindow):
             temp_script_path = os.path.join(temp_dir, script_name)
             
             # We construct a bash command to run the script via sudo, and then wait for user input so the window doesn't immediately close
-            bash_cmd = f"sudo bash {temp_script_path} \\\"{self.current_app_version}\\\"; echo ''; echo 'Press Enter to close this window...'; read"
+            bash_cmd = f"sudo bash {temp_script_path} '{self.current_app_version}'; echo ''; echo 'Press Enter to close this window...'; read"
             
             # Try to use konsole (SteamOS default), fallback to xterm if not available
             if shutil.which("konsole"):
