@@ -22,8 +22,6 @@ The easiest way to install, update, or uninstall is by using the standalone AppI
 3. A graphical window will appear where you can simply click **Install / Update** or **Uninstall**.
 4. Clicking these buttons will spawn a terminal window to run the script, which will prompt you for your `sudo` password.
 
-> **Note on Passwords:** If you have never set a desktop password on your SteamOS device, you will need to do so before installing. Open the **Konsole** application, type `passwd`, and press Enter. Follow the prompts to create a password (the text you type will remain invisible for security).
-
 ### Alternative Installation (from source)
 
 If you prefer to install manually, clone the repo:
@@ -126,6 +124,7 @@ Both `PrepareForShutdown` (via DBus) and SIGTERM trigger a graceful disconnect b
 - On MacBooks with notches, the notch area cuts into content
 - Very high resolutions and refresh rates may not work due to EDID 1.4 pixel-clock limits
 - Stuttering on some displays: Enable V-Sync and frame pacing in Moonlight.
+- **Black screen upon connection**: Try enabling the **Force Composite** option in the installer's Advanced Options.
 
 
 ## Tested On
