@@ -33,7 +33,10 @@ class UpdateCheckerThread(QThread):
                 data = json.loads(response.read().decode())
                 latest_tag = data.get("tag_name", "").strip()
                 html_url = data.get("html_url", "").strip()
-                if latest_tag and self.current_version != "DEV" and latest_tag > self.current_version:
+                
+                compare_tag = latest_tag[1:] if latest_tag.startswith("v") else latest_tag
+                
+                if latest_tag and self.current_version != "DEV" and compare_tag > self.current_version:
                     self.update_checked.emit(latest_tag, html_url)
         except Exception:
             pass
@@ -114,7 +117,7 @@ class InstallerApp(QMainWindow):
         self.cb_composite.setChecked(self.saved_config["force_composite"])
         adv_layout.addWidget(self.cb_composite)
         
-        self.save_cfg_btn = QPushButton("Save Configuration")
+        self.save_cfg_btn = QPushButton("Save Settings")
         self.save_cfg_btn.setMinimumHeight(35)
         self.save_cfg_btn.setStyleSheet("""
             QPushButton { background-color: #2a82da; color: white; padding: 5px; }
@@ -204,15 +207,19 @@ class InstallerApp(QMainWindow):
         if not installed:
             status_text = "Status: Not Installed"
             color = "#ff4c4c"
+            self.save_cfg_btn.hide()
         elif installed_version != self.current_app_version and self.current_app_version != "DEV":
             status_text = f"Status: Update Required (Installed: {installed_version})"
             color = "#ffa500"
+            self.save_cfg_btn.show()
         elif not running:
             status_text = "Status: Installed (Not Running)"
             color = "#ffa500"
+            self.save_cfg_btn.show()
         else:
             status_text = "Status: Installed and Running"
             color = "#4cff4c"
+            self.save_cfg_btn.show()
             
         self.status_label.setText(status_text)
         self.status_label.setStyleSheet(f"font-weight: bold; color: {color};")
