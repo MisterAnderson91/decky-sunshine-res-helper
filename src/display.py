@@ -25,6 +25,12 @@ STEAM_RES_STATE_FILE = SCRIPT_DIR / "steam_resolution.state"
 target_user = "deck"
 
 
+def _get_boot_id() -> str:
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except Exception:
+        return ""
+
 def _override_steam_resolution() -> None:
     """
     Save Steam's current "Maximum Game Resolution" and set it to "Native".
@@ -35,14 +41,14 @@ def _override_steam_resolution() -> None:
             # A previous session (e.g. before sleep / network drop / daemon restart) was never
             # restored, so the file already holds the user's real setting — don't overwrite it
             # with "Native".
-            saved = STEAM_RES_STATE_FILE.read_text().strip()
+            saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
             log.info(f"  Steam Maximum Game Resolution already saved as '{saved}' — keeping it")
         else:
             current = steam_resolution.read_global_resolution(target_user)
             if current is None:
                 log.error("  Could not read Steam Maximum Game Resolution — leaving it unchanged")
                 return
-            _ = STEAM_RES_STATE_FILE.write_text(current + "\n")
+            _ = STEAM_RES_STATE_FILE.write_text(f"{current}\n{_get_boot_id()}\n")
             log.info(f"  ✓ Saved Steam Maximum Game Resolution: '{current}'")
             if current == "Native":
                 log.info("  Steam Maximum Game Resolution is already 'Native'")
@@ -64,7 +70,7 @@ def _restore_steam_resolution() -> None:
     try:
         if not STEAM_RES_STATE_FILE.exists():
             return
-        saved = STEAM_RES_STATE_FILE.read_text().strip()
+        saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
         if not saved:
             log.error("  Saved Steam Maximum Game Resolution is empty — discarding")
             STEAM_RES_STATE_FILE.unlink()
@@ -176,7 +182,7 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
     _ = run_command(f"sh -c 'cat {edid_file.absolute()} > {edid_override_path}'")
     _ = run_command(f"sh -c 'echo on > {status_path}'")
     time.sleep(0.5)
-    _ = state_file.write_text(f"{card_name}\n{active_port}\n{edid_override_path}\n{backup_edid_file}\n")
+    _ = state_file.write_text(f"{card_name}\n{active_port}\n{edid_override_path}\n{backup_edid_file}\n{_get_boot_id()}\n")
     
     # Force Gamescope to rescan the backend to trigger the display switch
     log.info("Step 6: Triggering Gamescope backend rescan...")
