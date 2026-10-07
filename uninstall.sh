@@ -36,9 +36,12 @@ if not os.path.exists(CONF_PATH):
     sys.exit(0)
 do_cmd = 'sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
 undo_cmd = 'sh -c \"echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
-old_do_cmd = f'sh -c \"echo --connect,--width,\${{SUNSHINE_CLIENT_WIDTH}},--height,\${{SUNSHINE_CLIENT_HEIGHT}},--refresh-rate,\${{SUNSHINE_CLIENT_FPS}} > {TARGET_HOME}/.sunshine-res-helper.in && cat {TARGET_HOME}/.sunshine-res-helper.out\"'
-old_undo_cmd = f'sh -c \"echo --disconnect > {TARGET_HOME}/.sunshine-res-helper.in && cat {TARGET_HOME}/.sunshine-res-helper.out\"'
 our_cmd_obj = {'do': do_cmd, 'undo': undo_cmd}
+def is_our_cmd(cmd):
+    d, u = cmd.get('do', ''), cmd.get('undo', '')
+    return '.sunshine-res-helper.in' in d or '.sunshine-res-helper.out' in d or \
+           '.sunshine-res-helper.in' in u or '.sunshine-res-helper.out' in u
+
 with open(CONF_PATH, 'r') as f: lines = f.readlines()
 new_lines = []
 for line in lines:
@@ -48,10 +51,7 @@ for line in lines:
             try: cmds = json.loads(match.group(1).strip())
             except Exception: cmds = []
             if not isinstance(cmds, list): cmds = []
-            cmds = [cmd for cmd in cmds if not (
-                (cmd.get('do') == do_cmd and cmd.get('undo') == undo_cmd) or
-                (cmd.get('do') == old_do_cmd and cmd.get('undo') == old_undo_cmd)
-            )]
+            cmds = [cmd for cmd in cmds if not is_our_cmd(cmd)]
             if len(cmds) > 0: new_lines.append(f'global_prep_cmd = {json.dumps(cmds, separators=(\",\", \":\"))}\\n')
         else: new_lines.append(line)
     else: new_lines.append(line)
