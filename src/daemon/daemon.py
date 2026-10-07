@@ -554,10 +554,10 @@ def main() -> None:
                 log.info("Successfully restored stale Steam settings on boot.")
                 break
                 
-            log.info("Steam might not be ready yet. Retrying in 2 seconds...")
-            time.sleep(2)
+            log.info("Steam might not be ready yet. Retrying in 10 seconds...")
+            time.sleep(10)
         else:
-            log.error("Failed to restore all stale Steam settings after 60 seconds. Giving up.")
+            log.error("Failed to restore all stale Steam settings after 5 minutes. Giving up.")
 
     stale_virt = display.SCRIPT_DIR / "virt_display.state"
     if _is_stale(stale_virt, 4):
