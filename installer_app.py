@@ -76,6 +76,47 @@ class InstallerApp(QMainWindow):
         
         self.layout.addSpacing(10)
         
+        self.adv_btn = QPushButton("⚙️ Advanced Options")
+        self.adv_btn.setCheckable(True)
+        self.adv_btn.setStyleSheet("text-align: left; padding: 5px;")
+        
+        self.adv_widget = QWidget()
+        adv_layout = QVBoxLayout(self.adv_widget)
+        adv_layout.setContentsMargins(10, 0, 0, 0)
+        
+        self.config_path = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/config.json")
+        config = {"enable_hdr": True, "native_res": True, "force_composite": True}
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r") as f:
+                    config.update(json.load(f))
+            except Exception:
+                pass
+                
+        self.cb_hdr = QCheckBox("Enable HDR Support")
+        self.cb_hdr.setChecked(config.get("enable_hdr", True))
+        adv_layout.addWidget(self.cb_hdr)
+        
+        self.cb_native = QCheckBox("Set Maximum Game Resolution to Native")
+        self.cb_native.setChecked(config.get("native_res", True))
+        adv_layout.addWidget(self.cb_native)
+        
+        self.cb_composite = QCheckBox("Force Composite (Fixes Black Screen)")
+        self.cb_composite.setChecked(config.get("force_composite", True))
+        adv_layout.addWidget(self.cb_composite)
+        
+        self.layout.addWidget(self.adv_btn)
+        self.layout.addWidget(self.adv_widget)
+        self.adv_widget.setVisible(False)
+        
+        def toggle_adv(checked):
+            self.adv_widget.setVisible(checked)
+            self.setFixedSize(400, 560 if checked else 470)
+            
+        self.adv_btn.toggled.connect(toggle_adv)
+        
+        self.layout.addSpacing(10)
+        
         self.install_btn = QPushButton("Install / Update")
         self.install_btn.setMinimumHeight(40)
         self.install_btn.clicked.connect(self.install)
@@ -251,7 +292,18 @@ class InstallerApp(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to execute command:\n{str(e)}")
             return False
 
+    def _save_config(self):
+        config = {
+            "enable_hdr": self.cb_hdr.isChecked(),
+            "native_res": self.cb_native.isChecked(),
+            "force_composite": self.cb_composite.isChecked()
+        }
+        os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+        with open(self.config_path, "w") as f:
+            json.dump(config, f)
+
     def install(self):
+        self._save_config()
         self.run_script("install.sh")
 
     def uninstall(self):

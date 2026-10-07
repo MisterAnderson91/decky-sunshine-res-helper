@@ -22,8 +22,20 @@ from src import steam_settings
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
 STEAM_RES_STATE_FILE = SCRIPT_DIR / "gamescope_game_resolution_global.state"
 FC_STATE_FILE = SCRIPT_DIR / "gamescope_force_composite.state"
+HDR_STATE_FILE = SCRIPT_DIR / "gamescope_hdr_enabled.state"
+CONFIG_FILE = SCRIPT_DIR / "config.json"
 
 target_user = "deck"
+
+def _get_config() -> dict:
+    import json
+    cfg = {"enable_hdr": True, "native_res": True, "force_composite": True}
+    try:
+        if CONFIG_FILE.exists():
+            cfg.update(json.loads(CONFIG_FILE.read_text()))
+    except Exception as e:
+        log.error(f"Error reading config: {e}")
+    return cfg
 
 
 def _get_boot_id() -> str:
@@ -32,40 +44,42 @@ def _get_boot_id() -> str:
     except Exception:
         return ""
 
-def _override_steam_settings() -> None:
+def _override_steam_settings(config: dict) -> None:
     """
     Save Steam's current "Maximum Game Resolution" and "Force Composite", and set them for streaming.
     Best-effort: any failure is logged and the display switch carries on.
     """
     try:
-        if STEAM_RES_STATE_FILE.exists():
-            saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
-            log.info(f"  Steam Maximum Game Resolution already saved as '{saved}' — keeping it")
-        else:
-            current = steam_settings.read_global_resolution(target_user)
-            if current is None:
-                log.error("  Could not read Steam Maximum Game Resolution — leaving it unchanged")
+        if config.get("native_res", True):
+            if STEAM_RES_STATE_FILE.exists():
+                saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
+                log.info(f"  Steam Maximum Game Resolution already saved as '{saved}' — keeping it")
             else:
-                _ = STEAM_RES_STATE_FILE.write_text(f"{current}\n{_get_boot_id()}\n")
-                log.info(f"  ✓ Saved Steam Maximum Game Resolution: '{current}'")
-                if current != "Native":
-                    if steam_settings.write_global_resolution("Native", target_user):
-                        log.info("  ✓ Set Steam Maximum Game Resolution to 'Native'")
-                    else:
-                        log.error("  Could not set Steam Maximum Game Resolution to 'Native' — continuing")
-
-        if FC_STATE_FILE.exists():
-            saved_fc = FC_STATE_FILE.read_text().strip().split("\n")[0]
-            log.info(f"  Steam Force Composite already saved as '{saved_fc}' — keeping it")
-        else:
-            current_fc = steam_settings.read_force_composite(target_user)
-            _ = FC_STATE_FILE.write_text(f"{current_fc}\n{_get_boot_id()}\n")
-            log.info(f"  ✓ Saved Steam Force Composite: '{current_fc}'")
-            if not current_fc:
-                if steam_settings.write_force_composite(True, target_user):
-                    log.info("  ✓ Set Steam Force Composite to True")
+                current = steam_settings.read_global_resolution(target_user)
+                if current is None:
+                    log.error("  Could not read Steam Maximum Game Resolution — leaving it unchanged")
                 else:
-                    log.error("  Could not set Steam Force Composite to True — continuing")
+                    _ = STEAM_RES_STATE_FILE.write_text(f"{current}\n{_get_boot_id()}\n")
+                    log.info(f"  ✓ Saved Steam Maximum Game Resolution: '{current}'")
+                    if current != "Native":
+                        if steam_settings.write_global_resolution("Native", target_user):
+                            log.info("  ✓ Set Steam Maximum Game Resolution to 'Native'")
+                        else:
+                            log.error("  Could not set Steam Maximum Game Resolution to 'Native' — continuing")
+
+        if config.get("force_composite", True):
+            if FC_STATE_FILE.exists():
+                saved_fc = FC_STATE_FILE.read_text().strip().split("\n")[0]
+                log.info(f"  Steam Force Composite already saved as '{saved_fc}' — keeping it")
+            else:
+                current_fc = steam_settings.read_force_composite(target_user)
+                _ = FC_STATE_FILE.write_text(f"{current_fc}\n{_get_boot_id()}\n")
+                log.info(f"  ✓ Saved Steam Force Composite: '{current_fc}'")
+                if not current_fc:
+                    if steam_settings.write_force_composite(True, target_user):
+                        log.info("  ✓ Set Steam Force Composite to True")
+                    else:
+                        log.error("  Could not set Steam Force Composite to True — continuing")
 
     except Exception as exc:
         log.error(f"  Error while overriding Steam settings: {exc} — continuing")
@@ -144,11 +158,14 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
             vic_width, vic_height, vic_refresh, vic_code, vic_name = vic_result
             width, height, refresh_rate = vic_width, vic_height, vic_refresh
 
+    config = _get_config()
+    final_hdr = enable_hdr and config.get("enable_hdr", True)
+    
     edid_data = create_edid(
         width=width,
         height=height,
         refresh_rate=refresh_rate,
-        enable_hdr=enable_hdr,
+        enable_hdr=final_hdr,
         display_name="Virtual Display",
     )
     edid_file = SCRIPT_DIR / "custom_edid.bin"
@@ -187,8 +204,8 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
             log.warning(f"  No original EDID found for {active_port} and no tv_edid.bin fallback exists!")
 
     # Step 4b: Save Steam's Maximum Game Resolution and switch it to Native
-    log.info("Step 4b: Saving Steam Maximum Game Resolution and setting it to 'Native'...")
-    _override_steam_settings()
+    log.info("Step 4b: Saving Steam UI settings and conditionally applying streaming overrides...")
+    _override_steam_settings(config)
 
     # Step 5: Drop EDID cache by forcing disconnect
     log.info(f"Step 5: Forcing disconnect on ({active_port})...")
