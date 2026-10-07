@@ -1,14 +1,13 @@
 """
-Read and write SteamOS' "Maximum Game Resolution" setting.
+Read and write SteamOS settings.
 
-The setting is the Steam client setting ``gamescope_game_resolution_global``
-(field 21012 of the ``CMsgClientSettings`` protobuf). Steam caches it in memory
-and periodically rewrites ``localconfig.vdf``, so editing the file directly is
-reverted. Instead we:
+The settings are Steam client settings (fields in the ``CMsgClientSettings`` protobuf). 
+Steam caches them in memory and periodically rewrites ``localconfig.vdf``, so editing 
+the file directly is reverted. Instead we:
 
-* READ it from ``~/.local/share/Steam/userdata/<accountid>/config/localconfig.vdf``
-  (key ``GameResolutionGlobal``), which Steam updates as soon as it changes.
-* WRITE it by calling ``SteamClient.Settings.SetSetting(<base64 protobuf>)`` in
+* READ them from ``~/.local/share/Steam/userdata/<accountid>/config/localconfig.vdf``, 
+  which Steam updates as soon as it changes.
+* WRITE them by calling ``SteamClient.Settings.SetSetting(<base64 protobuf>)`` in
   Steam's SharedJSContext over the CEF remote-debugging port (enabled by Decky).
 
 Every public function here is best-effort: failures are logged and reported via
