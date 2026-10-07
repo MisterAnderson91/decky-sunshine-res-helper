@@ -33,7 +33,7 @@ class UpdateCheckerThread(QThread):
                 data = json.loads(response.read().decode())
                 latest_tag = data.get("tag_name", "").strip()
                 html_url = data.get("html_url", "").strip()
-                if latest_tag and latest_tag != self.current_version:
+                if latest_tag and self.current_version != "DEV" and latest_tag > self.current_version:
                     self.update_checked.emit(latest_tag, html_url)
         except Exception:
             pass
