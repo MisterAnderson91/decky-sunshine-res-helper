@@ -536,8 +536,8 @@ def main() -> None:
             return True  # From a previous boot
         return not sunshine_pid  # From this boot, but Sunshine crashed/stopped
 
-    if _is_stale(display.STEAM_RES_STATE_FILE, 1):
-        log.info("Found stale Steam resolution state (likely from a previous boot/crash). Restoring...")
+    if _is_stale(display.STEAM_RES_STATE_FILE, 1) or _is_stale(display.FC_STATE_FILE, 1):
+        log.info("Found stale Steam settings (likely from a previous boot/crash). Restoring...")
         display._restore_steam_resolution()
 
     stale_virt = display.SCRIPT_DIR / "virt_display.state"

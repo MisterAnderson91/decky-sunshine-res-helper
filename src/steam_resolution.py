@@ -35,6 +35,10 @@ log = logging.getLogger(__name__)
 SETTING_NAME = "gamescope_game_resolution_global"
 SETTING_FIELD = 21012
 VDF_KEY = "GameResolutionGlobal"
+
+FC_SETTING_NAME = "gamescope_force_composite"
+FC_SETTING_FIELD = 21011
+FC_VDF_KEY = "ForceComposite"
 STEAMID64_BASE = 76561197960265728
 
 CEF_DEBUG_HOST = "127.0.0.1"
@@ -108,6 +112,28 @@ def read_global_resolution(user: str) -> str | None:
     except Exception as exc:
         log.error("Steam resolution: failed to read current value: %s", exc)
         return None
+
+def read_force_composite(user: str) -> bool:
+    """
+    Return the current ForceComposite boolean value from localconfig.vdf.
+    Defaults to False if not present.
+    """
+    try:
+        steam_root = _steam_root(user)
+        account = _active_account_id(steam_root)
+        if not account:
+            log.error("ForceComposite: could not determine active Steam account under %s", steam_root)
+            return False
+
+        cfg = steam_root / "userdata" / account / "config" / "localconfig.vdf"
+        text = cfg.read_text(errors="ignore")
+        match = re.search(rf'"{FC_VDF_KEY}"\s*"([^"]*)"', text)
+        if not match:
+            return False
+        return match.group(1) == "1"
+    except Exception as exc:
+        log.error("ForceComposite: failed to read current value: %s", exc)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -212,18 +238,23 @@ def _cef_evaluate(js: str) -> dict:
         ws.close()
 
 
+def _varint(n: int) -> bytes:
+    out = bytearray()
+    while n > 0x7F:
+        out.append((n & 0x7F) | 0x80)
+        n >>= 7
+    out.append(n)
+    return bytes(out)
+
 def _encode_setting(value: str) -> str:
     """Encode {gamescope_game_resolution_global: value} as a base64 CMsgClientSettings protobuf."""
-    def varint(n: int) -> bytes:
-        out = bytearray()
-        while n > 0x7F:
-            out.append((n & 0x7F) | 0x80)
-            n >>= 7
-        out.append(n)
-        return bytes(out)
-
     raw = value.encode()
-    msg = varint((SETTING_FIELD << 3) | 2) + varint(len(raw)) + raw
+    msg = _varint((SETTING_FIELD << 3) | 2) + _varint(len(raw)) + raw
+    return base64.b64encode(msg).decode()
+
+def _encode_bool_setting(field_id: int, value: bool) -> str:
+    """Encode a boolean setting as a base64 CMsgClientSettings protobuf (wire type 0)."""
+    msg = _varint((field_id << 3) | 0) + _varint(1 if value else 0)
     return base64.b64encode(msg).decode()
 
 
@@ -266,4 +297,37 @@ def write_global_resolution(value: str, user: str | None = None) -> bool:
             time.sleep(0.2)
         else:
             log.warning("Steam resolution: Steam accepted %r but localconfig.vdf has not updated yet", value)
+    return True
+
+def write_force_composite(enabled: bool, user: str | None = None) -> bool:
+    """
+    Set Force Composite via Steam. Returns True if Steam accepted the call.
+    """
+    js = (
+        "(() => { if (!window.SteamClient?.Settings?.SetSetting) return 'no SteamClient.Settings.SetSetting';"
+        f" SteamClient.Settings.SetSetting({json.dumps(_encode_bool_setting(FC_SETTING_FIELD, enabled))}); return 'ok'; }})()"
+    )
+    try:
+        reply = _cef_evaluate(js)
+    except Exception as exc:
+        log.error("ForceComposite: could not reach Steam's CEF debugger to set %r: %s", enabled, exc)
+        return False
+
+    result = reply.get("result", {})
+    if "exceptionDetails" in result or "error" in reply:
+        details = result.get("exceptionDetails") or reply.get("error")
+        log.error("ForceComposite: SetSetting(%r) raised: %s", enabled, json.dumps(details)[:500])
+        return False
+    outcome = result.get("result", {}).get("value")
+    if outcome != "ok":
+        log.error("ForceComposite: SetSetting(%r) failed: %s", enabled, outcome)
+        return False
+
+    if user:
+        for _ in range(10):
+            if read_force_composite(user) == enabled:
+                break
+            time.sleep(0.2)
+        else:
+            log.warning("ForceComposite: Steam accepted %r but localconfig.vdf has not updated yet", enabled)
     return True

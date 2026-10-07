@@ -21,6 +21,7 @@ from src import steam_resolution
 
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
 STEAM_RES_STATE_FILE = SCRIPT_DIR / "gamescope_game_resolution_global.state"
+FC_STATE_FILE = SCRIPT_DIR / "gamescope_force_composite.state"
 
 target_user = "deck"
 
@@ -33,59 +34,74 @@ def _get_boot_id() -> str:
 
 def _override_steam_resolution() -> None:
     """
-    Save Steam's current "Maximum Game Resolution" and set it to "Native".
+    Save Steam's current "Maximum Game Resolution" and "Force Composite", and set them for streaming.
     Best-effort: any failure is logged and the display switch carries on.
     """
     try:
         if STEAM_RES_STATE_FILE.exists():
-            # A previous session (e.g. before sleep / network drop / daemon restart) was never
-            # restored, so the file already holds the user's real setting — don't overwrite it
-            # with "Native".
             saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
             log.info(f"  Steam Maximum Game Resolution already saved as '{saved}' — keeping it")
         else:
             current = steam_resolution.read_global_resolution(target_user)
             if current is None:
                 log.error("  Could not read Steam Maximum Game Resolution — leaving it unchanged")
-                return
-            _ = STEAM_RES_STATE_FILE.write_text(f"{current}\n{_get_boot_id()}\n")
-            log.info(f"  ✓ Saved Steam Maximum Game Resolution: '{current}'")
-            if current == "Native":
-                log.info("  Steam Maximum Game Resolution is already 'Native'")
-                return
+            else:
+                _ = STEAM_RES_STATE_FILE.write_text(f"{current}\n{_get_boot_id()}\n")
+                log.info(f"  ✓ Saved Steam Maximum Game Resolution: '{current}'")
+                if current != "Native":
+                    if steam_resolution.write_global_resolution("Native", target_user):
+                        log.info("  ✓ Set Steam Maximum Game Resolution to 'Native'")
+                    else:
+                        log.error("  Could not set Steam Maximum Game Resolution to 'Native' — continuing")
 
-        if steam_resolution.write_global_resolution("Native", target_user):
-            log.info("  ✓ Set Steam Maximum Game Resolution to 'Native'")
+        if FC_STATE_FILE.exists():
+            saved_fc = FC_STATE_FILE.read_text().strip().split("\n")[0]
+            log.info(f"  Steam Force Composite already saved as '{saved_fc}' — keeping it")
         else:
-            log.error("  Could not set Steam Maximum Game Resolution to 'Native' — continuing")
+            current_fc = steam_resolution.read_force_composite(target_user)
+            _ = FC_STATE_FILE.write_text(f"{current_fc}\n{_get_boot_id()}\n")
+            log.info(f"  ✓ Saved Steam Force Composite: '{current_fc}'")
+            if not current_fc:
+                if steam_resolution.write_force_composite(True, target_user):
+                    log.info("  ✓ Set Steam Force Composite to True")
+                else:
+                    log.error("  Could not set Steam Force Composite to True — continuing")
+
     except Exception as exc:
-        log.error(f"  Error while overriding Steam Maximum Game Resolution: {exc} — continuing")
+        log.error(f"  Error while overriding Steam settings: {exc} — continuing")
 
 
 def _restore_steam_resolution() -> None:
     """
-    Restore the "Maximum Game Resolution" saved by _override_steam_resolution().
+    Restore the settings saved by _override_steam_resolution().
     Best-effort: on failure the state file is kept so a later disconnect can retry.
     """
     try:
-        if not STEAM_RES_STATE_FILE.exists():
-            return
-        saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
-        if not saved:
-            log.error("  Saved Steam Maximum Game Resolution is empty — discarding")
-            STEAM_RES_STATE_FILE.unlink()
-            return
+        if STEAM_RES_STATE_FILE.exists():
+            saved = STEAM_RES_STATE_FILE.read_text().strip().split("\n")[0]
+            if saved:
+                if steam_resolution.write_global_resolution(saved, target_user):
+                    STEAM_RES_STATE_FILE.unlink()
+                    log.info(f"  ✓ Restored Steam Maximum Game Resolution to '{saved}'")
+                else:
+                    log.error(f"  Could not restore Steam Maximum Game Resolution to '{saved}' — kept for next attempt")
+            else:
+                STEAM_RES_STATE_FILE.unlink()
 
-        if steam_resolution.write_global_resolution(saved, target_user):
-            STEAM_RES_STATE_FILE.unlink()
-            log.info(f"  ✓ Restored Steam Maximum Game Resolution to '{saved}'")
-        else:
-            log.error(
-                f"  Could not restore Steam Maximum Game Resolution to '{saved}' — "
-                f"kept in {STEAM_RES_STATE_FILE} for the next attempt"
-            )
+        if FC_STATE_FILE.exists():
+            saved_fc = FC_STATE_FILE.read_text().strip().split("\n")[0]
+            if saved_fc:
+                val = saved_fc == "True"
+                if steam_resolution.write_force_composite(val, target_user):
+                    FC_STATE_FILE.unlink()
+                    log.info(f"  ✓ Restored Steam Force Composite to '{val}'")
+                else:
+                    log.error(f"  Could not restore Steam Force Composite to '{val}' — kept for next attempt")
+            else:
+                FC_STATE_FILE.unlink()
+
     except Exception as exc:
-        log.error(f"  Error while restoring Steam Maximum Game Resolution: {exc} — continuing")
+        log.error(f"  Error while restoring Steam settings: {exc} — continuing")
 
 def _get_target_uid() -> int:
     import pwd

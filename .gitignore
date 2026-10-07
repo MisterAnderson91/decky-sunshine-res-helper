@@ -2,6 +2,7 @@ __pycache__/
 custom_edid.bin
 virt_display.state
 gamescope_game_resolution_global.state
+gamescope_force_composite.state
 .direnv
 backups/
 original_edid.bin
