@@ -53,6 +53,7 @@ cat > "$SERVICE_DEST" <<EOF
 [Unit]
 Description=Decky Sunshine Res-Helper Daemon
 After=network.target
+RequiresMountsFor=${INSTALL_DIR}
 
 [Service]
 Type=simple
