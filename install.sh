@@ -111,9 +111,24 @@ for line in lines:
 if MODE == 'install' and not found:
     if len(new_lines) > 0 and not new_lines[-1].endswith('\n'): new_lines[-1] += '\n'
     new_lines.append(f'global_prep_cmd = {json.dumps([our_cmd_obj], separators=(\",\", \":\"))}\\n')
+changed = (lines != new_lines)
 with open(CONF_PATH, 'w') as f: f.writelines(new_lines)
-print(f'Successfully updated Sunshine config for {MODE}.')
-" "$TARGET_HOME" "install"
+if changed:
+    print(f'Successfully updated Sunshine config for {MODE}.')
+    print('SUNSHINE_CONFIG_CHANGED_YES')
+else:
+    print('Sunshine config already up to date.')
+" "$TARGET_HOME" "install" > /tmp/sunshine_update_output.txt
+
+cat /tmp/sunshine_update_output.txt
+
+if grep -q "SUNSHINE_CONFIG_CHANGED_YES" /tmp/sunshine_update_output.txt; then
+    echo "==> Restarting Sunshine to apply config changes..."
+    # Kill the flatpak. If it's managed by a systemd service (as is standard), 
+    # it will automatically be restarted by systemd.
+    flatpak kill dev.lizardbyte.app.Sunshine || true
+fi
+rm -f /tmp/sunshine_update_output.txt
 
 echo ""
 echo "=================================================================="

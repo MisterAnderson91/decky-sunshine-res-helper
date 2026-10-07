@@ -55,8 +55,21 @@ for line in lines:
             if len(cmds) > 0: new_lines.append(f'global_prep_cmd = {json.dumps(cmds, separators=(\",\", \":\"))}\\n')
         else: new_lines.append(line)
     else: new_lines.append(line)
+changed = (lines != new_lines)
 with open(CONF_PATH, 'w') as f: f.writelines(new_lines)
-print(f'Successfully updated Sunshine config for {MODE}.')
-" "$TARGET_HOME" "uninstall"
+if changed:
+    print(f'Successfully updated Sunshine config for {MODE}.')
+    print('SUNSHINE_CONFIG_CHANGED_YES')
+else:
+    print('Sunshine config already up to date.')
+" "$TARGET_HOME" "uninstall" > /tmp/sunshine_update_output.txt
+
+cat /tmp/sunshine_update_output.txt
+
+if grep -q "SUNSHINE_CONFIG_CHANGED_YES" /tmp/sunshine_update_output.txt; then
+    echo "==> Restarting Sunshine to apply config changes..."
+    flatpak kill dev.lizardbyte.app.Sunshine || true
+fi
+rm -f /tmp/sunshine_update_output.txt
 
 echo "Uninstall complete."
