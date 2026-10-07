@@ -113,8 +113,11 @@ class InstallerApp(QMainWindow):
         adv_layout.addWidget(self.cb_composite)
         
         self.save_cfg_btn = QPushButton("Save Configuration")
-        self.save_cfg_btn.setStyleSheet("background-color: #2a82da; color: white; padding: 5px;")
-        self.save_cfg_btn.hide()
+        self.save_cfg_btn.setStyleSheet("""
+            QPushButton { background-color: #2a82da; color: white; padding: 5px; }
+            QPushButton:disabled { background-color: #555555; color: #aaaaaa; }
+        """)
+        self.save_cfg_btn.setEnabled(False)
         self.save_cfg_btn.clicked.connect(self._save_config_standalone)
         adv_layout.addWidget(self.save_cfg_btn)
         
@@ -338,7 +341,7 @@ class InstallerApp(QMainWindow):
         if update_cb(self.cb_native, "native_res"): changed = True
         if update_cb(self.cb_composite, "force_composite"): changed = True
         
-        self.save_cfg_btn.setVisible(changed)
+        self.save_cfg_btn.setEnabled(changed)
         
     def _save_config_standalone(self):
         self._save_config()
