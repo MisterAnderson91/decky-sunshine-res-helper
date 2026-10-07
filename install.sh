@@ -66,7 +66,8 @@ EOF
 chmod 644 "$SERVICE_DEST"
 
 systemctl daemon-reload
-systemctl enable --now decky-sunshine-res-helper
+systemctl enable decky-sunshine-res-helper
+systemctl restart decky-sunshine-res-helper
 
 echo ""
 echo "Done. Status:"
