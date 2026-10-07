@@ -204,20 +204,22 @@ class InstallerApp(QMainWindow):
             except Exception:
                 pass
                 
+        disp_ver = installed_version if installed_version == "unknown" else f"v{installed_version}"
+        
         if not installed:
             status_text = "Status: Not Installed"
             color = "#ff4c4c"
             self.save_cfg_btn.hide()
         elif installed_version != self.current_app_version and self.current_app_version != "DEV":
-            status_text = f"Status: Update Required (Installed: {installed_version})"
+            status_text = f"Status: Update Required (Installed: {disp_ver})"
             color = "#ffa500"
             self.save_cfg_btn.show()
         elif not running:
-            status_text = "Status: Installed (Not Running)"
+            status_text = f"Status: Installed {disp_ver} (Not Running)"
             color = "#ffa500"
             self.save_cfg_btn.show()
         else:
-            status_text = "Status: Installed and Running"
+            status_text = f"Status: Installed {disp_ver} and Running"
             color = "#4cff4c"
             self.save_cfg_btn.show()
             
