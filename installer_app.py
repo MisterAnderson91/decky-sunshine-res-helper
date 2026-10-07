@@ -116,9 +116,18 @@ class InstallerApp(QMainWindow):
         
         running = False
         if installed:
-            result = subprocess.run(["systemctl", "is-active", "decky-sunshine-res-helper"], capture_output=True, text=True)
-            if result.stdout.strip() == "active":
-                running = True
+            try:
+                # AppImages inject LD_LIBRARY_PATH which can break system binaries like systemctl.
+                # Clear it out from the environment before running.
+                env = os.environ.copy()
+                env.pop("LD_LIBRARY_PATH", None)
+                env.pop("APPDIR", None)
+                result = subprocess.run(["systemctl", "is-active", "decky-sunshine-res-helper.service"], 
+                                      capture_output=True, text=True, env=env)
+                if result.stdout.strip() == "active":
+                    running = True
+            except Exception as e:
+                print(f"Failed to check service status: {e}")
                 
         if not installed:
             status_text = "Status: Not Installed"
