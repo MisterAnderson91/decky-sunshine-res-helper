@@ -17,7 +17,7 @@ It runs as a persistent daemon and automatically manages display connections by 
 
 ## Requirements
 
-- [decky-sunshine](https://github.com/s0t7x/decky-sunshine) (or standalone Sunshine installed via Flatpak)
+- [decky-sunshine](https://github.com/s0t7x/decky-sunshine)
 - Python 3
 - `jeepney` Python package (installed automatically by `install.sh`)
 - debugfs mounted at `/sys/kernel/debug/`
