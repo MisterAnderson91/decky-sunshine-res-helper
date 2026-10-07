@@ -23,16 +23,21 @@ SCRIPT_DIR = Path(__file__).parent.parent.absolute()
 STEAM_RES_STATE_FILE = SCRIPT_DIR / "gamescope_game_resolution_global.state"
 FC_STATE_FILE = SCRIPT_DIR / "gamescope_force_composite.state"
 HDR_STATE_FILE = SCRIPT_DIR / "gamescope_hdr_enabled.state"
-CONFIG_FILE = SCRIPT_DIR / "config.json"
+CONFIG_FILE = SCRIPT_DIR / "config.conf"
 
 target_user = "deck"
 
 def _get_config() -> dict:
-    import json
+    import configparser
     cfg = {"enable_hdr": True, "native_res": True, "force_composite": False}
     try:
         if CONFIG_FILE.exists():
-            cfg.update(json.loads(CONFIG_FILE.read_text()))
+            parser = configparser.ConfigParser()
+            parser.read(CONFIG_FILE)
+            if "Settings" in parser:
+                cfg["enable_hdr"] = parser.getboolean("Settings", "enable_hdr", fallback=cfg["enable_hdr"])
+                cfg["native_res"] = parser.getboolean("Settings", "native_res", fallback=cfg["native_res"])
+                cfg["force_composite"] = parser.getboolean("Settings", "force_composite", fallback=cfg["force_composite"])
     except Exception as e:
         log.error(f"Error reading config: {e}")
     return cfg

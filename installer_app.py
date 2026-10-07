@@ -84,14 +84,19 @@ class InstallerApp(QMainWindow):
         adv_layout = QVBoxLayout(self.adv_widget)
         adv_layout.setContentsMargins(10, 0, 0, 0)
         
-        self.config_path = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/config.json")
+        self.config_path = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/config.conf")
         self.default_config = {"enable_hdr": True, "native_res": True, "force_composite": False}
         self.saved_config = self.default_config.copy()
         
         if os.path.exists(self.config_path):
             try:
-                with open(self.config_path, "r") as f:
-                    self.saved_config.update(json.load(f))
+                import configparser
+                parser = configparser.ConfigParser()
+                parser.read(self.config_path)
+                if "Settings" in parser:
+                    self.saved_config["enable_hdr"] = parser.getboolean("Settings", "enable_hdr", fallback=self.saved_config["enable_hdr"])
+                    self.saved_config["native_res"] = parser.getboolean("Settings", "native_res", fallback=self.saved_config["native_res"])
+                    self.saved_config["force_composite"] = parser.getboolean("Settings", "force_composite", fallback=self.saved_config["force_composite"])
             except Exception:
                 pass
                 
@@ -305,14 +310,16 @@ class InstallerApp(QMainWindow):
             return False
 
     def _save_config(self):
-        config = {
-            "enable_hdr": self.cb_hdr.isChecked(),
-            "native_res": self.cb_native.isChecked(),
-            "force_composite": self.cb_composite.isChecked()
+        import configparser
+        parser = configparser.ConfigParser()
+        parser["Settings"] = {
+            "enable_hdr": str(self.cb_hdr.isChecked()),
+            "native_res": str(self.cb_native.isChecked()),
+            "force_composite": str(self.cb_composite.isChecked())
         }
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, "w") as f:
-            json.dump(config, f)
+            parser.write(f)
             
     def _on_config_changed(self):
         changed = False
