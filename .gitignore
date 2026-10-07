@@ -1,7 +1,7 @@
 __pycache__/
 custom_edid.bin
 virt_display.state
-steam_resolution.state
+gamescope_game_resolution_global.state
 .direnv
 backups/
 original_edid.bin

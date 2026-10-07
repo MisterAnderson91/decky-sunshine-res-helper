@@ -40,7 +40,7 @@ rsync -a --delete \
     --exclude='.coverage' \
     --exclude='custom_edid.bin' \
     --exclude='virt_display.state' \
-    --exclude='steam_resolution.state' \
+    --exclude='gamescope_game_resolution_global.state' \
     . "$INSTALL_DIR/"
 
 echo "==> Installing jeepney to $INSTALL_DIR..."

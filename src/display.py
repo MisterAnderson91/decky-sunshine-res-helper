@@ -20,7 +20,7 @@ from src.edid import create_edid, find_best_vic_resolution, get_pixel_clock_info
 from src import steam_resolution
 
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
-STEAM_RES_STATE_FILE = SCRIPT_DIR / "steam_resolution.state"
+STEAM_RES_STATE_FILE = SCRIPT_DIR / "gamescope_game_resolution_global.state"
 
 target_user = "deck"
 
