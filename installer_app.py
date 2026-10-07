@@ -377,7 +377,6 @@ class InstallerApp(QMainWindow):
             "force_composite": self.cb_composite.isChecked()
         }
         self._on_config_changed()
-        QMessageBox.information(self, "Configuration Saved", "Advanced options have been saved instantly.\\nThey will apply on your next Moonlight connection.")
 
     def install(self):
         self._save_config()

@@ -10,6 +10,12 @@ if [ -z "$TARGET_USER" ]; then
 fi
 APP_VERSION="${1:-unknown}"
 
+if [ ! -d "/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine" ] && [ ! -d "/root/.config/sunshine" ]; then
+    echo "Error: Could not find Sunshine configuration directory."
+    echo "Please ensure decky-sunshine (or standalone Sunshine) is installed and has been run at least once before installing this helper."
+    exit 1
+fi
+
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 INSTALL_DIR="${TARGET_HOME}/.local/share/decky-sunshine-res-helper"
 SERVICE_DEST=/etc/systemd/system/decky-sunshine-res-helper.service
