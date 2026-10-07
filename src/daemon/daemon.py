@@ -538,9 +538,26 @@ def main() -> None:
             return True  # From a previous boot
         return not sunshine_pid  # From this boot, but Sunshine crashed/stopped
 
-    if _is_stale(display.STEAM_RES_STATE_FILE, 1) or _is_stale(display.FC_STATE_FILE, 1):
-        log.info("Found stale Steam settings (likely from a previous boot/crash). Restoring...")
-        display._restore_steam_settings()
+    stale_res = _is_stale(display.STEAM_RES_STATE_FILE, 1)
+    stale_fc = _is_stale(display.FC_STATE_FILE, 1)
+    
+    if stale_res or stale_fc:
+        log.info("Found stale Steam settings (likely from a previous boot/crash). Waiting for Steam to be ready to restore...")
+        
+        for attempt in range(30):
+            display._restore_steam_settings()
+            
+            needs_res = stale_res and display.STEAM_RES_STATE_FILE.exists()
+            needs_fc = stale_fc and display.FC_STATE_FILE.exists()
+            
+            if not needs_res and not needs_fc:
+                log.info("Successfully restored stale Steam settings on boot.")
+                break
+                
+            log.info("Steam might not be ready yet. Retrying in 2 seconds...")
+            time.sleep(2)
+        else:
+            log.error("Failed to restore all stale Steam settings after 60 seconds. Giving up.")
 
     stale_virt = display.SCRIPT_DIR / "virt_display.state"
     if _is_stale(stale_virt, 4):
