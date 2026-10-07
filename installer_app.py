@@ -60,7 +60,7 @@ class InstallerApp(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(title_label)
         
-        rc_label = QLabel("Release Candidate 1")
+        rc_label = QLabel("Release Candidate 3")
         rc_label.setStyleSheet("color: #aaaaaa; font-style: italic;")
         rc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(rc_label)
@@ -164,8 +164,8 @@ class InstallerApp(QMainWindow):
         
     def show_commands(self):
         home = os.path.expanduser("~")
-        do_cmd = f'sh -c "echo --connect,--width,\\${{SUNSHINE_CLIENT_WIDTH}},--height,\\${{SUNSHINE_CLIENT_HEIGHT}},--refresh-rate,\\${{SUNSHINE_CLIENT_FPS}} > {home}/.sunshine-res-helper.in && cat {home}/.sunshine-res-helper.out"'
-        undo_cmd = f'sh -c "echo --disconnect > {home}/.sunshine-res-helper.in && cat {home}/.sunshine-res-helper.out"'
+        do_cmd = 'sh -c "echo --connect,--width,\\${SUNSHINE_CLIENT_WIDTH},--height,\\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\\${SUNSHINE_CLIENT_FPS} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
+        undo_cmd = 'sh -c "echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
         
         dialog = QDialog(self)
         dialog.setWindowTitle("Sunshine Configuration Commands")
