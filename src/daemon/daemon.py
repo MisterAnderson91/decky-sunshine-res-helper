@@ -515,8 +515,8 @@ def main() -> None:
     except KeyError:
         target_home = f"/home/{target_user}"
         
-    _fifo_in = f"{target_home}/.sunshine-res-helper.in"
-    _fifo_out = f"{target_home}/.sunshine-res-helper.out"
+    _fifo_in = "/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in"
+    _fifo_out = "/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"
     
     display.target_user = target_user
 
