@@ -523,6 +523,18 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
 
+    # Recover from ungraceful shutdown/reboot:
+    # If Sunshine is not running but we have stale state files, restore Steam resolution and clean up.
+    if not _get_sunshine_pid():
+        if display.STEAM_RES_STATE_FILE.exists():
+            log.info("Sunshine is not running, but stale Steam resolution state found. Restoring...")
+            display._restore_steam_resolution()
+        
+        stale_virt = display.SCRIPT_DIR / "virt_display.state"
+        if stale_virt.exists():
+            log.info("Cleaning up stale virtual display state file...")
+            stale_virt.unlink()
+
     sleep_thread = threading.Thread(target=_dbus_listener, daemon=True, name="dbus-listener")
     sleep_thread.start()
     
