@@ -50,6 +50,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install PyQt6 pyinstaller
 
+    - name: Inject Version into Python App
+      run: |
+        sed -i "s/self.current_app_version = \"DEV\"/self.current_app_version = \"${{ env.VERSION }}\"/" installer_app.py
+
     - name: Build executable with PyInstaller
       run: |
         pyinstaller --noconfirm --noconsole --onedir "installer_app.py"

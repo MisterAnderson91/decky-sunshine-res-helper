@@ -44,7 +44,8 @@ class InstallerApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Decky Sunshine Res-Helper Installer")
         self.setFixedSize(400, 470)
-        self.current_app_version = "2026.09.29"
+        # This will be replaced during the GitHub Action build
+        self.current_app_version = "DEV"
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -131,7 +132,7 @@ class InstallerApp(QMainWindow):
         
         def toggle_adv(checked):
             self.adv_widget.setVisible(checked)
-            self.setFixedSize(400, 560 if checked else 470)
+            self.setFixedSize(400, 600 if checked else 470)
             
         self.adv_btn.toggled.connect(toggle_adv)
         
@@ -190,9 +191,21 @@ class InstallerApp(QMainWindow):
             except Exception as e:
                 print(f"Failed to check service status: {e}")
                 
+        version_file = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/version.txt")
+        installed_version = "unknown"
+        if os.path.exists(version_file):
+            try:
+                with open(version_file, "r") as f:
+                    installed_version = f.read().strip()
+            except Exception:
+                pass
+                
         if not installed:
             status_text = "Status: Not Installed"
             color = "#ff4c4c"
+        elif installed_version != self.current_app_version and self.current_app_version != "DEV":
+            status_text = f"Status: Update Required (Installed: {installed_version})"
+            color = "#ffa500"
         elif not running:
             status_text = "Status: Installed (Not Running)"
             color = "#ffa500"
@@ -280,7 +293,7 @@ class InstallerApp(QMainWindow):
             temp_script_path = os.path.join(temp_dir, script_name)
             
             # We construct a bash command to run the script via sudo, and then wait for user input so the window doesn't immediately close
-            bash_cmd = f"sudo bash {temp_script_path}; echo ''; echo 'Press Enter to close this window...'; read"
+            bash_cmd = f"sudo bash {temp_script_path} \\\"{self.current_app_version}\\\"; echo ''; echo 'Press Enter to close this window...'; read"
             
             # Try to use konsole (SteamOS default), fallback to xterm if not available
             if shutil.which("konsole"):

@@ -8,6 +8,8 @@ if [ -z "$TARGET_USER" ]; then
     echo "Could not determine the target user."
     exit 1
 fi
+APP_VERSION="${1:-unknown}"
+
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 INSTALL_DIR="${TARGET_HOME}/.local/share/decky-sunshine-res-helper"
 SERVICE_DEST=/etc/systemd/system/decky-sunshine-res-helper.service
@@ -43,6 +45,9 @@ rsync -a --delete \
     --exclude='gamescope_game_resolution_global.state' \
     --exclude='gamescope_force_composite.state' \
     . "$INSTALL_DIR/"
+
+echo "==> Saving version info..."
+echo "$APP_VERSION" > "$INSTALL_DIR/version.txt"
 
 echo "==> Installing jeepney to $INSTALL_DIR..."
 cp -r /tmp/jeepney_dl/jeepney "$INSTALL_DIR/"
