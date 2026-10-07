@@ -547,6 +547,19 @@ def main() -> None:
     
     if stale_res or stale_fc:
         def _delayed_restore():
+            # Read saved values before they are deleted by _restore_steam_settings
+            expected_res = None
+            if stale_res and display.STEAM_RES_STATE_FILE.exists():
+                lines = display.STEAM_RES_STATE_FILE.read_text().strip().split("\n")
+                if lines and lines[0]:
+                    expected_res = lines[0]
+                    
+            expected_fc = None
+            if stale_fc and display.FC_STATE_FILE.exists():
+                lines = display.FC_STATE_FILE.read_text().strip().split("\n")
+                if lines and lines[0]:
+                    expected_fc = lines[0] == "True"
+
             log.info("Waiting 30 seconds before restoring stale Steam settings to ensure Steam UI is fully loaded...")
             time.sleep(30)
             
@@ -557,13 +570,36 @@ def main() -> None:
                 needs_fc = stale_fc and display.FC_STATE_FILE.exists()
                 
                 if not needs_res and not needs_fc:
-                    log.info("Successfully restored stale Steam settings on boot.")
                     break
                     
                 log.info("Steam might not be ready yet. Retrying in 20 seconds...")
                 time.sleep(20)
             else:
-                log.error("Failed to restore all stale Steam settings after 5 minutes. Giving up.")
+                log.error("Failed to push initial stale Steam settings after 5 minutes. Giving up.")
+                return
+
+            # Wait 120 seconds to see if Steam reverted them during boot
+            time.sleep(120)
+            
+            from src import steam_settings
+            
+            if expected_res is not None:
+                current_res = steam_settings.read_global_resolution(display.target_user)
+                if current_res != expected_res:
+                    log.warning(f"Steam overwrote Maximum Game Resolution during boot. Re-applying '{expected_res}'...")
+                    steam_settings.write_global_resolution(expected_res, display.target_user)
+                    
+            if expected_fc is not None:
+                current_fc = steam_settings.read_force_composite(display.target_user)
+                if current_fc != expected_fc:
+                    log.warning(f"Steam overwrote Force Composite during boot. Re-applying '{expected_fc}'...")
+                    steam_settings.write_force_composite(expected_fc, display.target_user)
+                    
+            # Ensure state files are deleted just in case
+            if display.STEAM_RES_STATE_FILE.exists():
+                display.STEAM_RES_STATE_FILE.unlink()
+            if display.FC_STATE_FILE.exists():
+                display.FC_STATE_FILE.unlink()
 
         log.info("Found stale Steam settings (likely from a previous boot/crash). Spawning delayed restore thread...")
         threading.Thread(target=_delayed_restore, daemon=True).start()
