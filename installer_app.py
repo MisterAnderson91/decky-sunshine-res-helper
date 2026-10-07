@@ -215,11 +215,11 @@ class InstallerApp(QMainWindow):
             color = "#ffa500"
             self.save_cfg_btn.show()
         elif not running:
-            status_text = f"Status: Installed {disp_ver} (Not Running)"
+            status_text = "Status: Installed (Not Running)"
             color = "#ffa500"
             self.save_cfg_btn.show()
         else:
-            status_text = f"Status: Installed {disp_ver} and Running"
+            status_text = "Status: Installed and Running"
             color = "#4cff4c"
             self.save_cfg_btn.show()
             
