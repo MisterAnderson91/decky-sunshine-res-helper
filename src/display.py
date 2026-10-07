@@ -105,7 +105,8 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
     log.info(f"Applying display resolution override: {width}x{height}@{refresh_rate}Hz")
 
     state_file = SCRIPT_DIR / "virt_display.state"
-    if state_file.exists():
+    was_stale_session = state_file.exists()
+    if was_stale_session:
         stale = state_file.read_text().strip().split("\n")
         stale_card = stale[0] if len(stale) > 0 else ""
         stale_port = stale[1] if len(stale) > 1 else ""
@@ -155,16 +156,19 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
     backup_edid_file = SCRIPT_DIR / "original_edid.bin"
     fallback_edid_file = SCRIPT_DIR / "tv_edid.bin"
     
-    if original_edid_path.exists():
-        _ = run_command(f"sh -c 'cat {original_edid_path.absolute()} > {backup_edid_file.absolute()}'")
-        
-    if backup_edid_file.exists() and backup_edid_file.stat().st_size > 0:
-        log.info(f"  ✓ Saved current hardware EDID to {backup_edid_file}")
-    elif fallback_edid_file.exists() and fallback_edid_file.stat().st_size > 0:
-        _ = run_command(f"sh -c 'cp {fallback_edid_file.absolute()} {backup_edid_file.absolute()}'")
-        log.info(f"  ✓ Display asleep. Used persistent fallback TV EDID from {fallback_edid_file}")
+    if was_stale_session and backup_edid_file.exists() and backup_edid_file.stat().st_size > 0:
+        log.info(f"  ✓ Stale session active. Kept existing hardware EDID backup: {backup_edid_file}")
     else:
-        log.warning(f"  No original EDID found for {active_port} and no tv_edid.bin fallback exists!")
+        if original_edid_path.exists():
+            _ = run_command(f"sh -c 'cat {original_edid_path.absolute()} > {backup_edid_file.absolute()}'")
+            
+        if backup_edid_file.exists() and backup_edid_file.stat().st_size > 0:
+            log.info(f"  ✓ Saved current hardware EDID to {backup_edid_file}")
+        elif fallback_edid_file.exists() and fallback_edid_file.stat().st_size > 0:
+            _ = run_command(f"sh -c 'cp {fallback_edid_file.absolute()} {backup_edid_file.absolute()}'")
+            log.info(f"  ✓ Display asleep. Used persistent fallback TV EDID from {fallback_edid_file}")
+        else:
+            log.warning(f"  No original EDID found for {active_port} and no tv_edid.bin fallback exists!")
 
     # Step 4b: Save Steam's Maximum Game Resolution and switch it to Native
     log.info("Step 4b: Saving Steam Maximum Game Resolution and setting it to 'Native'...")
