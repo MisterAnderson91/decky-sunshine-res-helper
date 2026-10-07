@@ -43,33 +43,37 @@ _running = True
 # ---------------------------------------------------------------------------
 
 def _acquire_inhibitor() -> int | None:
-    try:
-        conn = open_dbus_connection(bus="SYSTEM")
-        addr = DBusAddress(
-            "/org/freedesktop/login1",
-            bus_name="org.freedesktop.login1",
-            interface="org.freedesktop.login1.Manager",
-        )
-        msg = new_method_call(
-            addr,
-            "Inhibit",
-            "ssss",
-            ("sleep", "decky-sunshine-res-helper", "Revert display resolution before sleep", "delay"),
-        )
-        reply = conn.send_and_get_reply(msg)
-        # reply.body[0] is a jeepney.wrappers.UnixFd; .fileno() gives the raw fd
-        raw_fd = reply.body[0].fileno()
-        # Duplicate so the jeepney connection closing doesn't steal the fd
-        owned_fd = os.dup(raw_fd)
-        conn.close()
-        log.info("Acquired sleep inhibitor lock (fd=%d)", owned_fd)
-        return owned_fd
-    except ImportError:
-        log.warning("jeepney not installed — sleep inhibitor disabled")
-        return None
-    except Exception as exc:
-        log.warning("Could not acquire sleep inhibitor: %s", exc)
-        return None
+    for attempt in range(15):
+        try:
+            conn = open_dbus_connection(bus="SYSTEM")
+            addr = DBusAddress(
+                "/org/freedesktop/login1",
+                bus_name="org.freedesktop.login1",
+                interface="org.freedesktop.login1.Manager",
+            )
+            msg = new_method_call(
+                addr,
+                "Inhibit",
+                "ssss",
+                ("sleep", "decky-sunshine-res-helper", "Revert display resolution before sleep", "delay"),
+            )
+            reply = conn.send_and_get_reply(msg)
+            # reply.body[0] is a jeepney.wrappers.UnixFd; .fileno() gives the raw fd
+            raw_fd = reply.body[0].fileno()
+            # Duplicate so the jeepney connection closing doesn't steal the fd
+            owned_fd = os.dup(raw_fd)
+            conn.close()
+            log.info("Acquired sleep inhibitor lock (fd=%d)", owned_fd)
+            return owned_fd
+        except ImportError:
+            log.warning("jeepney not installed — sleep inhibitor disabled")
+            return None
+        except Exception as exc:
+            if attempt < 14:
+                time.sleep(2)
+            else:
+                log.warning("Could not acquire sleep inhibitor after 30s: %s", exc)
+                return None
 
 
 def _release_inhibitor() -> None:
