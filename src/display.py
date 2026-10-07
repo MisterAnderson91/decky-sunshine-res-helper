@@ -105,6 +105,7 @@ def _restore_steam_settings() -> None:
                 else:
                     log.error(f"  Could not restore Steam Maximum Game Resolution to '{saved}' — kept for next attempt")
             else:
+                log.warning("  Steam resolution state file was empty (likely corrupted by power cut), ignoring.")
                 STEAM_RES_STATE_FILE.unlink()
 
         if FC_STATE_FILE.exists():
@@ -117,6 +118,7 @@ def _restore_steam_settings() -> None:
                 else:
                     log.error(f"  Could not restore Steam Force Composite to '{val}' — kept for next attempt")
             else:
+                log.warning("  Steam Force Composite state file was empty (likely corrupted by power cut), ignoring.")
                 FC_STATE_FILE.unlink()
 
     except Exception as exc:
