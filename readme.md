@@ -64,7 +64,7 @@ sudo ./install.sh
 
 ## Configure Sunshine
 
-The daemon listens on a FIFO pipe at `~/.sunshine-res-helper.in`. Sunshine talks to it by echoing arguments to that file.
+The daemon listens on FIFO pipes located in the Sunshine configuration directory (e.g., `/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in`). Sunshine talks to it by echoing arguments to that file.
 
 *(Note: The installer automatically adds these commands to your Sunshine configuration file. They are listed below solely for reference in case you need to copy them manually.)*
 
@@ -73,13 +73,13 @@ In Sunshine's **General** tab, set:
 **Do Command (On Client Connect):**
 
 ```bash
-sh -c "echo --connect,--width,${SUNSHINE_CLIENT_WIDTH},--height,${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,${SUNSHINE_CLIENT_FPS} > /home/deck/.sunshine-res-helper.in && cat /home/deck/.sunshine-res-helper.out"
+sh -c "echo --connect,--width,${SUNSHINE_CLIENT_WIDTH},--height,${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,${SUNSHINE_CLIENT_FPS},--hdr,${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"
 ```
 
 **Undo Command (On Client Disconnect):**
 
 ```bash
-sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/.sunshine-res-helper.out"
+sh -c "echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"
 ```
 
 
@@ -88,14 +88,15 @@ sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/
 
 ### On Connect
 
-1. Daemon receives `--connect` with width, height, and refresh rate
-2. Generates a custom EDID matching the client's display parameters
+1. Daemon receives `--connect` with width, height, refresh rate, and HDR status.
+2. Generates a custom EDID matching the client's display parameters.
 3. Finds the currently active display slot (e.g. your physical TV on `HDMI-A-1`).
 4. Saves a backup of your physical TV's hardware EDID. If the TV is currently unresponsive (e.g. turned off or on another input), it falls back to a persistently saved `tv_edid.bin`.
-5. Forces the active slot `off` via sysfs, clearing the kernel's immediate display state.
-6. Overrides EDID for that slot via debugfs with the custom Client EDID.
-7. Forces the slot `on` via sysfs, effectively injecting the Custom EDID into the kernel's hardware cache.
-8. Triggers a Gamescope backend rescan using `gamescopectl backend_set_dirty`, causing Gamescope to gracefully transition the display to the new custom resolution.
+5. Modifies Steam's internal settings via the CEF debugger to temporarily override the "Maximum Game Resolution" and toggle "Force Composite", depending on your advanced options.
+6. Forces the active slot `off` via sysfs, clearing the kernel's immediate display state.
+7. Overrides EDID for that slot via debugfs with the custom Client EDID.
+8. Forces the slot `on` via sysfs, effectively injecting the Custom EDID into the kernel's hardware cache.
+9. Triggers a Gamescope backend rescan using `gamescopectl backend_set_dirty`, causing Gamescope to gracefully transition the display to the new custom resolution.
 
 ### On Disconnect
 
@@ -105,6 +106,7 @@ sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/
 4. Clears the EDID override file.
 5. Sets the slot status back to hardware `detect` mode.
 6. Triggers a Gamescope backend rescan using `gamescopectl backend_set_dirty`, which forces Gamescope to transition back to the physical display at its true native resolution.
+7. Restores your Steam UI's "Maximum Game Resolution" and "Force Composite" settings to their original values.
 
 ### On Sunshine Crash or Stop
 
