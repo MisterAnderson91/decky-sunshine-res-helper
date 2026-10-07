@@ -13,7 +13,7 @@ It runs as a persistent daemon and automatically manages display connections by 
 - **Automatic Game Resolution Matching (Optional)**: Temporarily overrides Steam's global "Maximum Game Resolution" setting so games start and render at the client's native resolution without manual configuration, and reloads your previous setting on disconnect. Can be disabled in the installer's Advanced Options.
 - **Resilient & Safe**: Automatically restores your physical display when you disconnect, if Sunshine crashes, if the network drops, or before the Steam Deck goes to sleep.
 - **Easy Installation**: Ships as a standalone graphical AppImage for one-click installation and updates.
-- **Gamescope Native**: Deep integration with SteamOS via debugfs and `gamescopectl` for seamless display transitions.
+- **Gamescope Native**: Designed to work in SteamOS Game Mode so there's no need to switch to Desktop mode for streaming.
 
 ## Requirements
 
