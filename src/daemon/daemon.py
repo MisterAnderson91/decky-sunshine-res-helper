@@ -544,7 +544,7 @@ def main() -> None:
     if stale_res or stale_fc:
         log.info("Found stale Steam settings (likely from a previous boot/crash). Waiting for Steam to be ready to restore...")
         
-        for attempt in range(30):
+        for attempt in range(15):
             display._restore_steam_settings()
             
             needs_res = stale_res and display.STEAM_RES_STATE_FILE.exists()
@@ -554,8 +554,8 @@ def main() -> None:
                 log.info("Successfully restored stale Steam settings on boot.")
                 break
                 
-            log.info("Steam might not be ready yet. Retrying in 10 seconds...")
-            time.sleep(10)
+            log.info("Steam might not be ready yet. Retrying in 20 seconds...")
+            time.sleep(20)
         else:
             log.error("Failed to restore all stale Steam settings after 5 minutes. Giving up.")
 
