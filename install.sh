@@ -57,7 +57,8 @@ echo "==> Installing systemd service..."
 cat > "$SERVICE_DEST" <<EOF
 [Unit]
 Description=Decky Sunshine Res-Helper Daemon
-After=network.target
+After=network.target systemd-logind.service
+Wants=systemd-logind.service
 RequiresMountsFor=${INSTALL_DIR}
 
 [Service]
