@@ -10,7 +10,7 @@ It runs as a persistent daemon and automatically manages display connections by 
 
 - **Matches Stream Resolution**: Generates custom EDIDs on-the-fly to exactly match your Moonlight client's resolution and refresh rate.
 - **HDR Support (Optional)**: Automatically toggles HDR capability on the host based on the client's Moonlight "Enable HDR" setting. Can be configured in the installer's Advanced Options.
-- **Steam UI Integration (Optional)**: Temporarily overrides Steam's "Maximum Game Resolution" setting so games render at the client's native resolution without manual configuration. Can be disabled in the installer's Advanced Options.
+- **Automatic Game Resolution Matching (Optional)**: Temporarily overrides Steam's global "Maximum Game Resolution" setting so games start and render at the client's native resolution without manual configuration, and reloads your previous setting on disconnect. Can be disabled in the installer's Advanced Options.
 - **Resilient & Safe**: Automatically restores your physical display when you disconnect, if Sunshine crashes, if the network drops, or before the Steam Deck goes to sleep.
 - **Easy Installation**: Ships as a standalone graphical AppImage for one-click installation and updates.
 - **Gamescope Native**: Deep integration with SteamOS via debugfs and `gamescopectl` for seamless display transitions.
