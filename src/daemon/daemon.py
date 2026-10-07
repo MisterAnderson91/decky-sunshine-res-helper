@@ -42,10 +42,9 @@ _running = True
 # Sleep inhibitor (systemd logind delay lock)
 # ---------------------------------------------------------------------------
 
-def _acquire_inhibitor() -> int | None:
+def _acquire_inhibitor(conn) -> int | None:
     for attempt in range(15):
         try:
-            conn = open_dbus_connection(bus="SYSTEM")
             addr = DBusAddress(
                 "/org/freedesktop/login1",
                 bus_name="org.freedesktop.login1",
@@ -62,7 +61,6 @@ def _acquire_inhibitor() -> int | None:
             raw_fd = reply.body[0].fileno()
             # Duplicate so the jeepney connection closing doesn't steal the fd
             owned_fd = os.dup(raw_fd)
-            conn.close()
             log.info("Acquired sleep inhibitor lock (fd=%d)", owned_fd)
             return owned_fd
         except ImportError:
@@ -281,7 +279,7 @@ def _dbus_listener() -> None:
 
         # Acquire the inhibitor here, after the connection is proven to work,
         # rather than racing at daemon startup before the bus is fully ready.
-        _inhibitor_fd = _acquire_inhibitor()
+        _inhibitor_fd = _acquire_inhibitor(conn)
 
         log.info("DBus listener ready (sleep, shutdown, Sunshine unit)")
 
