@@ -43,13 +43,14 @@ class InstallerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Decky Sunshine Res-Helper Installer")
-        self.setFixedSize(400, 470)
+        self.setFixedWidth(420)
         # This will be replaced during the GitHub Action build
         self.current_app_version = "DEV"
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
+        self.layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetFixedSize)
         self.layout.setContentsMargins(20, 20, 20, 20)
         self.layout.setSpacing(15)
         
@@ -114,6 +115,7 @@ class InstallerApp(QMainWindow):
         adv_layout.addWidget(self.cb_composite)
         
         self.save_cfg_btn = QPushButton("Save Configuration")
+        self.save_cfg_btn.setMinimumHeight(35)
         self.save_cfg_btn.setStyleSheet("""
             QPushButton { background-color: #2a82da; color: white; padding: 5px; }
             QPushButton:disabled { background-color: #555555; color: #aaaaaa; }
@@ -132,7 +134,6 @@ class InstallerApp(QMainWindow):
         
         def toggle_adv(checked):
             self.adv_widget.setVisible(checked)
-            self.setFixedSize(400, 600 if checked else 470)
             
         self.adv_btn.toggled.connect(toggle_adv)
         
