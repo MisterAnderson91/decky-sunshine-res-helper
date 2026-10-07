@@ -8,16 +8,16 @@ It runs as a persistent daemon and automatically manages display connections by 
 
 ## Features
 
-- **Matching Stream Resolution**: Generates custom EDIDs on-the-fly to exactly match your Moonlight client's resolution and refresh rate.
-- **HDR Support**: Automatically toggles HDR capability on the host based on the client's Moonlight "Enable HDR" setting.
-- **Steam UI Integration**: Temporarily overrides Steam's "Maximum Game Resolution" setting so games render at the client's native resolution without manual configuration.
+- **Matches Stream Resolution**: Generates custom EDIDs on-the-fly to exactly match your Moonlight client's resolution and refresh rate.
+- **HDR Support (Optional)**: Automatically toggles HDR capability on the host based on the client's Moonlight "Enable HDR" setting. Can be configured in the installer's Advanced Options.
+- **Steam UI Integration (Optional)**: Temporarily overrides Steam's "Maximum Game Resolution" setting so games render at the client's native resolution without manual configuration. Can be disabled in the installer's Advanced Options.
 - **Resilient & Safe**: Automatically restores your physical display when you disconnect, if Sunshine crashes, if the network drops, or before the Steam Deck goes to sleep.
 - **Easy Installation**: Ships as a standalone graphical AppImage for one-click installation and updates.
 - **Gamescope Native**: Deep integration with SteamOS via debugfs and `gamescopectl` for seamless display transitions.
 
 ## Requirements
 
-- [decky-sunshine](https://github.com/s0t7x/decky-sunshine)
+- [decky-sunshine](https://github.com/s0t7x/decky-sunshine) must be installed first
 - Python 3
 - `jeepney` Python package (installed automatically by `install.sh`)
 - debugfs mounted at `/sys/kernel/debug/`
