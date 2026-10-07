@@ -546,22 +546,27 @@ def main() -> None:
     stale_fc = _is_stale(display.FC_STATE_FILE, 1)
     
     if stale_res or stale_fc:
-        log.info("Found stale Steam settings (likely from a previous boot/crash). Waiting for Steam to be ready to restore...")
-        
-        for attempt in range(15):
-            display._restore_steam_settings()
+        def _delayed_restore():
+            log.info("Waiting 30 seconds before restoring stale Steam settings to ensure Steam UI is fully loaded...")
+            time.sleep(30)
             
-            needs_res = stale_res and display.STEAM_RES_STATE_FILE.exists()
-            needs_fc = stale_fc and display.FC_STATE_FILE.exists()
-            
-            if not needs_res and not needs_fc:
-                log.info("Successfully restored stale Steam settings on boot.")
-                break
+            for attempt in range(15):
+                display._restore_steam_settings()
                 
-            log.info("Steam might not be ready yet. Retrying in 20 seconds...")
-            time.sleep(20)
-        else:
-            log.error("Failed to restore all stale Steam settings after 5 minutes. Giving up.")
+                needs_res = stale_res and display.STEAM_RES_STATE_FILE.exists()
+                needs_fc = stale_fc and display.FC_STATE_FILE.exists()
+                
+                if not needs_res and not needs_fc:
+                    log.info("Successfully restored stale Steam settings on boot.")
+                    break
+                    
+                log.info("Steam might not be ready yet. Retrying in 20 seconds...")
+                time.sleep(20)
+            else:
+                log.error("Failed to restore all stale Steam settings after 5 minutes. Giving up.")
+
+        log.info("Found stale Steam settings (likely from a previous boot/crash). Spawning delayed restore thread...")
+        threading.Thread(target=_delayed_restore, daemon=True).start()
 
     stale_virt = display.SCRIPT_DIR / "virt_display.state"
     if _is_stale(stale_virt, 4):
