@@ -6,8 +6,18 @@ It runs as a persistent daemon and automatically manages display connections by 
 
 > ⚠️ If your monitor or TV screen ever gets stuck on "Invalid format" or similar, just hard reboot your device and it will clear the override.
 
+## Features
+
+- **Matches Stream Resolution**: Generates custom EDIDs on-the-fly to exactly match your Moonlight client's resolution and refresh rate.
+- **HDR Support (Optional)**: Automatically toggles HDR capability on the host based on the client's Moonlight "Enable HDR" setting. Can be configured in the installer's Advanced Options.
+- **Automatic Game Resolution Matching (Optional)**: Temporarily overrides Steam's global "Maximum Game Resolution" setting so games start and render at the client's native resolution without manual configuration, and reloads your previous setting on disconnect. Can be disabled in the installer's Advanced Options.
+- **Resilient & Safe**: Automatically restores your physical display when you disconnect, if Sunshine crashes, if the network drops, or before the Steam Deck goes to sleep.
+- **Easy Installation**: Ships as a standalone graphical AppImage for one-click installation and updates.
+- **Gamescope Native**: Designed to work in SteamOS Game Mode so there's no need to switch to Desktop mode for streaming.
+
 ## Requirements
 
+- [decky-sunshine](https://github.com/s0t7x/decky-sunshine) must be installed first
 - Python 3
 - `jeepney` Python package (installed automatically by `install.sh`)
 - debugfs mounted at `/sys/kernel/debug/`
@@ -21,8 +31,6 @@ The easiest way to install, update, or uninstall is by using the standalone AppI
 2. Open your Downloads folder and double-click the `.AppImage` file to execute it.
 3. A graphical window will appear where you can simply click **Install / Update** or **Uninstall**.
 4. Clicking these buttons will spawn a terminal window to run the script, which will prompt you for your `sudo` password.
-
-> **Note on Passwords:** If you have never set a desktop password on your SteamOS device, you will need to do so before installing. Open the **Konsole** application, type `passwd`, and press Enter. Follow the prompts to create a password (the text you type will remain invisible for security).
 
 ### Alternative Installation (from source)
 
@@ -64,7 +72,7 @@ sudo ./install.sh
 
 ## Configure Sunshine
 
-The daemon listens on a FIFO pipe at `~/.sunshine-res-helper.in`. Sunshine talks to it by echoing arguments to that file.
+The daemon listens on FIFO pipes located in the Sunshine configuration directory (e.g., `/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in`). Sunshine talks to it by echoing arguments to that file.
 
 *(Note: The installer automatically adds these commands to your Sunshine configuration file. They are listed below solely for reference in case you need to copy them manually.)*
 
@@ -73,13 +81,13 @@ In Sunshine's **General** tab, set:
 **Do Command (On Client Connect):**
 
 ```bash
-sh -c "echo --connect,--width,${SUNSHINE_CLIENT_WIDTH},--height,${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,${SUNSHINE_CLIENT_FPS} > /home/deck/.sunshine-res-helper.in && cat /home/deck/.sunshine-res-helper.out"
+sh -c "echo --connect,--width,${SUNSHINE_CLIENT_WIDTH},--height,${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,${SUNSHINE_CLIENT_FPS},--hdr,${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"
 ```
 
 **Undo Command (On Client Disconnect):**
 
 ```bash
-sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/.sunshine-res-helper.out"
+sh -c "echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"
 ```
 
 
@@ -88,14 +96,15 @@ sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/
 
 ### On Connect
 
-1. Daemon receives `--connect` with width, height, and refresh rate
-2. Generates a custom EDID matching the client's display parameters
+1. Daemon receives `--connect` with width, height, refresh rate, and HDR status.
+2. Generates a custom EDID matching the client's display parameters.
 3. Finds the currently active display slot (e.g. your physical TV on `HDMI-A-1`).
 4. Saves a backup of your physical TV's hardware EDID. If the TV is currently unresponsive (e.g. turned off or on another input), it falls back to a persistently saved `tv_edid.bin`.
-5. Forces the active slot `off` via sysfs, clearing the kernel's immediate display state.
-6. Overrides EDID for that slot via debugfs with the custom Client EDID.
-7. Forces the slot `on` via sysfs, effectively injecting the Custom EDID into the kernel's hardware cache.
-8. Triggers a Gamescope backend rescan using `gamescopectl backend_set_dirty`, causing Gamescope to gracefully transition the display to the new custom resolution.
+5. Modifies Steam's internal settings via the CEF debugger to temporarily override the "Maximum Game Resolution" and toggle "Force Composite", depending on your advanced options.
+6. Forces the active slot `off` via sysfs, clearing the kernel's immediate display state.
+7. Overrides EDID for that slot via debugfs with the custom Client EDID.
+8. Forces the slot `on` via sysfs, effectively injecting the Custom EDID into the kernel's hardware cache.
+9. Triggers a Gamescope backend rescan using `gamescopectl backend_set_dirty`, causing Gamescope to gracefully transition the display to the new custom resolution.
 
 ### On Disconnect
 
@@ -105,6 +114,7 @@ sh -c "echo --disconnect > /home/deck/.sunshine-res-helper.in && cat /home/deck/
 4. Clears the EDID override file.
 5. Sets the slot status back to hardware `detect` mode.
 6. Triggers a Gamescope backend rescan using `gamescopectl backend_set_dirty`, which forces Gamescope to transition back to the physical display at its true native resolution.
+7. Restores your Steam UI's "Maximum Game Resolution" and "Force Composite" settings to their original values.
 
 ### On Sunshine Crash or Stop
 
@@ -124,6 +134,7 @@ Both `PrepareForShutdown` (via DBus) and SIGTERM trigger a graceful disconnect b
 - On MacBooks with notches, the notch area cuts into content
 - Very high resolutions and refresh rates may not work due to EDID 1.4 pixel-clock limits
 - Stuttering on some displays: Enable V-Sync and frame pacing in Moonlight.
+- **Black screen upon connection**: Try enabling the **Force Composite** option in the installer's Advanced Options.
 
 
 ## Tested On

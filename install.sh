@@ -8,6 +8,14 @@ if [ -z "$TARGET_USER" ]; then
     echo "Could not determine the target user."
     exit 1
 fi
+APP_VERSION="${1:-unknown}"
+
+if [ ! -d "/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine" ] && [ ! -d "/root/.config/sunshine" ]; then
+    echo "Error: Could not find Sunshine configuration directory."
+    echo "Please ensure decky-sunshine (or standalone Sunshine) is installed and has been run at least once before installing this helper."
+    exit 1
+fi
+
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 INSTALL_DIR="${TARGET_HOME}/.local/share/decky-sunshine-res-helper"
 SERVICE_DEST=/etc/systemd/system/decky-sunshine-res-helper.service
@@ -40,7 +48,12 @@ rsync -a --delete \
     --exclude='.coverage' \
     --exclude='custom_edid.bin' \
     --exclude='virt_display.state' \
+    --exclude='gamescope_game_resolution_global.state' \
+    --exclude='gamescope_force_composite.state' \
     . "$INSTALL_DIR/"
+
+echo "==> Saving version info..."
+echo "$APP_VERSION" > "$INSTALL_DIR/version.txt"
 
 echo "==> Installing jeepney to $INSTALL_DIR..."
 cp -r /tmp/jeepney_dl/jeepney "$INSTALL_DIR/"
@@ -50,7 +63,9 @@ echo "==> Installing systemd service..."
 cat > "$SERVICE_DEST" <<EOF
 [Unit]
 Description=Decky Sunshine Res-Helper Daemon
-After=network.target
+After=network.target systemd-logind.service
+Wants=systemd-logind.service
+RequiresMountsFor=${INSTALL_DIR}
 
 [Service]
 Type=simple
@@ -65,7 +80,8 @@ EOF
 chmod 644 "$SERVICE_DEST"
 
 systemctl daemon-reload
-systemctl enable --now decky-sunshine-res-helper
+systemctl enable decky-sunshine-res-helper
+systemctl restart decky-sunshine-res-helper
 
 echo ""
 echo "Done. Status:"
@@ -80,9 +96,14 @@ MODE = sys.argv[2]
 if not os.path.exists(CONF_PATH):
     print(f'Sunshine config not found at {CONF_PATH}, skipping automation.')
     sys.exit(0)
-do_cmd = f'sh -c \"echo --connect,--width,\${{SUNSHINE_CLIENT_WIDTH}},--height,\${{SUNSHINE_CLIENT_HEIGHT}},--refresh-rate,\${{SUNSHINE_CLIENT_FPS}} > {TARGET_HOME}/.sunshine-res-helper.in && cat {TARGET_HOME}/.sunshine-res-helper.out\"'
-undo_cmd = f'sh -c \"echo --disconnect > {TARGET_HOME}/.sunshine-res-helper.in && cat {TARGET_HOME}/.sunshine-res-helper.out\"'
+do_cmd = 'sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS},--hdr,\${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
+undo_cmd = 'sh -c \"echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
 our_cmd_obj = {'do': do_cmd, 'undo': undo_cmd}
+def is_our_cmd(cmd):
+    d, u = cmd.get('do', ''), cmd.get('undo', '')
+    return '.sunshine-res-helper.in' in d or '.sunshine-res-helper.out' in d or \
+           '.sunshine-res-helper.in' in u or '.sunshine-res-helper.out' in u
+
 with open(CONF_PATH, 'r') as f: lines = f.readlines()
 new_lines = []
 found = False
@@ -94,7 +115,7 @@ for line in lines:
             try: cmds = json.loads(match.group(1).strip())
             except Exception: cmds = []
             if not isinstance(cmds, list): cmds = []
-            cmds = [cmd for cmd in cmds if not (cmd.get('do') == do_cmd and cmd.get('undo') == undo_cmd)]
+            cmds = [cmd for cmd in cmds if not is_our_cmd(cmd)]
             if MODE == 'install': cmds.append(our_cmd_obj)
             if len(cmds) > 0: new_lines.append(f'global_prep_cmd = {json.dumps(cmds, separators=(\",\", \":\"))}\\n')
         else: new_lines.append(line)
@@ -102,9 +123,24 @@ for line in lines:
 if MODE == 'install' and not found:
     if len(new_lines) > 0 and not new_lines[-1].endswith('\n'): new_lines[-1] += '\n'
     new_lines.append(f'global_prep_cmd = {json.dumps([our_cmd_obj], separators=(\",\", \":\"))}\\n')
+changed = (lines != new_lines)
 with open(CONF_PATH, 'w') as f: f.writelines(new_lines)
-print(f'Successfully updated Sunshine config for {MODE}.')
-" "$TARGET_HOME" "install"
+if changed:
+    print(f'Successfully updated Sunshine config for {MODE}.')
+    print('SUNSHINE_CONFIG_CHANGED_YES')
+else:
+    print('Sunshine config already up to date.')
+" "$TARGET_HOME" "install" > /tmp/sunshine_update_output.txt
+
+cat /tmp/sunshine_update_output.txt
+
+if grep -q "SUNSHINE_CONFIG_CHANGED_YES" /tmp/sunshine_update_output.txt; then
+    echo "==> Restarting Sunshine to apply config changes..."
+    # Kill the flatpak. If it's managed by a systemd service (as is standard), 
+    # it will automatically be restarted by systemd.
+    flatpak kill dev.lizardbyte.app.Sunshine || true
+fi
+rm -f /tmp/sunshine_update_output.txt
 
 echo ""
 echo "=================================================================="
@@ -114,8 +150,8 @@ echo "provided here in case they weren't added automatically (or if you"
 echo "need to copy them manually):"
 echo ""
 echo "Do Command:"
-echo "sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS} > ${TARGET_HOME}/.sunshine-res-helper.in && cat ${TARGET_HOME}/.sunshine-res-helper.out\""
+echo "sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS},--hdr,\${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\""
 echo ""
 echo "Undo Command:"
-echo "sh -c \"echo --disconnect > ${TARGET_HOME}/.sunshine-res-helper.in && cat ${TARGET_HOME}/.sunshine-res-helper.out\""
+echo "sh -c \"echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\""
 echo "=================================================================="

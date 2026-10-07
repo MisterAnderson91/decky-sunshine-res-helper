@@ -8,7 +8,7 @@ import ssl
 from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QPushButton, QLabel, QMessageBox, QHBoxLayout, QDialog, QTextEdit)
+                             QPushButton, QLabel, QMessageBox, QHBoxLayout, QDialog, QTextEdit, QCheckBox)
 
 class UpdateCheckerThread(QThread):
     update_checked = pyqtSignal(str, str)
@@ -33,8 +33,19 @@ class UpdateCheckerThread(QThread):
                 data = json.loads(response.read().decode())
                 latest_tag = data.get("tag_name", "").strip()
                 html_url = data.get("html_url", "").strip()
-                if latest_tag and latest_tag != self.current_version:
-                    self.update_checked.emit(latest_tag, html_url)
+                
+                compare_tag = latest_tag[1:] if latest_tag.startswith("v") else latest_tag
+                
+                if latest_tag and self.current_version != "DEV":
+                    try:
+                        latest_parts = tuple(map(int, compare_tag.split(".")))
+                        current_parts = tuple(map(int, self.current_version.split(".")))
+                        is_newer = latest_parts > current_parts
+                    except ValueError:
+                        is_newer = compare_tag > self.current_version
+                        
+                    if is_newer:
+                        self.update_checked.emit(latest_tag, html_url)
         except Exception:
             pass
 
@@ -43,12 +54,14 @@ class InstallerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Decky Sunshine Res-Helper Installer")
-        self.setFixedSize(400, 470)
-        self.current_app_version = "2026.09.29"
+        self.setFixedWidth(420)
+        # This will be replaced during the GitHub Action build
+        self.current_app_version = "DEV"
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
+        self.layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetFixedSize)
         self.layout.setContentsMargins(20, 20, 20, 20)
         self.layout.setSpacing(15)
         
@@ -60,11 +73,6 @@ class InstallerApp(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(title_label)
         
-        rc_label = QLabel("Release Candidate 1")
-        rc_label.setStyleSheet("color: #aaaaaa; font-style: italic;")
-        rc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(rc_label)
-        
         desc_label = QLabel("Install, Update, or Uninstall the Res-Helper service.\nRequires root privileges.")
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
@@ -73,6 +81,67 @@ class InstallerApp(QMainWindow):
         self.status_label = QLabel("Status: Checking...")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(self.status_label)
+        
+        self.layout.addSpacing(10)
+        
+        self.adv_btn = QPushButton("⚙️ Advanced Options")
+        self.adv_btn.setCheckable(True)
+        self.adv_btn.setStyleSheet("text-align: center; padding: 5px;")
+        
+        self.adv_widget = QWidget()
+        adv_layout = QVBoxLayout(self.adv_widget)
+        adv_layout.setContentsMargins(10, 0, 0, 0)
+        
+        self.config_path = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/config.conf")
+        self.default_config = {"enable_hdr": True, "native_res": True, "force_composite": False}
+        self.saved_config = self.default_config.copy()
+        
+        if os.path.exists(self.config_path):
+            try:
+                import configparser
+                parser = configparser.ConfigParser()
+                parser.read(self.config_path)
+                if "Settings" in parser:
+                    self.saved_config["enable_hdr"] = parser.getboolean("Settings", "enable_hdr", fallback=self.saved_config["enable_hdr"])
+                    self.saved_config["native_res"] = parser.getboolean("Settings", "native_res", fallback=self.saved_config["native_res"])
+                    self.saved_config["force_composite"] = parser.getboolean("Settings", "force_composite", fallback=self.saved_config["force_composite"])
+            except Exception:
+                pass
+                
+        self.cb_hdr = QCheckBox("Enable HDR Support")
+        self.cb_hdr.setChecked(self.saved_config["enable_hdr"])
+        adv_layout.addWidget(self.cb_hdr)
+        
+        self.cb_native = QCheckBox("Set Maximum Game Resolution to Native")
+        self.cb_native.setChecked(self.saved_config["native_res"])
+        adv_layout.addWidget(self.cb_native)
+        
+        self.cb_composite = QCheckBox("Force Composite (Fixes Black Screen)")
+        self.cb_composite.setChecked(self.saved_config["force_composite"])
+        adv_layout.addWidget(self.cb_composite)
+        
+        self.save_cfg_btn = QPushButton("Save Settings")
+        self.save_cfg_btn.setMinimumHeight(35)
+        self.save_cfg_btn.setStyleSheet("""
+            QPushButton { background-color: #2a82da; color: white; padding: 5px; }
+            QPushButton:disabled { background-color: #555555; color: #aaaaaa; }
+        """)
+        self.save_cfg_btn.setEnabled(False)
+        self.save_cfg_btn.clicked.connect(self._save_config_standalone)
+        adv_layout.addWidget(self.save_cfg_btn)
+        
+        self.cb_hdr.toggled.connect(self._on_config_changed)
+        self.cb_native.toggled.connect(self._on_config_changed)
+        self.cb_composite.toggled.connect(self._on_config_changed)
+        
+        self.layout.addWidget(self.adv_btn)
+        self.layout.addWidget(self.adv_widget)
+        self.adv_widget.setVisible(False)
+        
+        def toggle_adv(checked):
+            self.adv_widget.setVisible(checked)
+            
+        self.adv_btn.toggled.connect(toggle_adv)
         
         self.layout.addSpacing(10)
         
@@ -116,19 +185,46 @@ class InstallerApp(QMainWindow):
         
         running = False
         if installed:
-            result = subprocess.run(["systemctl", "is-active", "decky-sunshine-res-helper"], capture_output=True, text=True)
-            if result.stdout.strip() == "active":
-                running = True
+            try:
+                # AppImages inject LD_LIBRARY_PATH which can break system binaries like systemctl.
+                # Clear it out from the environment before running.
+                env = os.environ.copy()
+                env.pop("LD_LIBRARY_PATH", None)
+                env.pop("APPDIR", None)
+                result = subprocess.run(["systemctl", "is-active", "decky-sunshine-res-helper.service"], 
+                                      capture_output=True, text=True, env=env)
+                if result.stdout.strip() == "active":
+                    running = True
+            except Exception as e:
+                print(f"Failed to check service status: {e}")
                 
+        version_file = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/version.txt")
+        installed_version = "unknown"
+        if os.path.exists(version_file):
+            try:
+                with open(version_file, "r") as f:
+                    installed_version = f.read().strip()
+            except Exception:
+                pass
+                
+        disp_ver = installed_version if installed_version == "unknown" else f"v{installed_version}"
+        
         if not installed:
             status_text = "Status: Not Installed"
             color = "#ff4c4c"
+            self.save_cfg_btn.hide()
+        elif installed_version != self.current_app_version and self.current_app_version != "DEV":
+            status_text = f"Status: Update Required (Installed: {disp_ver})"
+            color = "#ffa500"
+            self.save_cfg_btn.show()
         elif not running:
             status_text = "Status: Installed (Not Running)"
             color = "#ffa500"
+            self.save_cfg_btn.show()
         else:
             status_text = "Status: Installed and Running"
             color = "#4cff4c"
+            self.save_cfg_btn.show()
             
         self.status_label.setText(status_text)
         self.status_label.setStyleSheet(f"font-weight: bold; color: {color};")
@@ -155,8 +251,8 @@ class InstallerApp(QMainWindow):
         
     def show_commands(self):
         home = os.path.expanduser("~")
-        do_cmd = f'sh -c "echo --connect,--width,\\${{SUNSHINE_CLIENT_WIDTH}},--height,\\${{SUNSHINE_CLIENT_HEIGHT}},--refresh-rate,\\${{SUNSHINE_CLIENT_FPS}} > {home}/.sunshine-res-helper.in && cat {home}/.sunshine-res-helper.out"'
-        undo_cmd = f'sh -c "echo --disconnect > {home}/.sunshine-res-helper.in && cat {home}/.sunshine-res-helper.out"'
+        do_cmd = 'sh -c "echo --connect,--width,\\${SUNSHINE_CLIENT_WIDTH},--height,\\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\\${SUNSHINE_CLIENT_FPS},--hdr,\\${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
+        undo_cmd = 'sh -c "echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
         
         dialog = QDialog(self)
         dialog.setWindowTitle("Sunshine Configuration Commands")
@@ -210,7 +306,7 @@ class InstallerApp(QMainWindow):
             temp_script_path = os.path.join(temp_dir, script_name)
             
             # We construct a bash command to run the script via sudo, and then wait for user input so the window doesn't immediately close
-            bash_cmd = f"sudo bash {temp_script_path}; echo ''; echo 'Press Enter to close this window...'; read"
+            bash_cmd = f"sudo bash {temp_script_path} '{self.current_app_version}'; echo ''; echo 'Press Enter to close this window...'; read"
             
             # Try to use konsole (SteamOS default), fallback to xterm if not available
             if shutil.which("konsole"):
@@ -242,7 +338,48 @@ class InstallerApp(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to execute command:\n{str(e)}")
             return False
 
+    def _save_config(self):
+        import configparser
+        parser = configparser.ConfigParser()
+        parser["Settings"] = {
+            "enable_hdr": str(self.cb_hdr.isChecked()),
+            "native_res": str(self.cb_native.isChecked()),
+            "force_composite": str(self.cb_composite.isChecked())
+        }
+        os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+        with open(self.config_path, "w") as f:
+            parser.write(f)
+            
+    def _on_config_changed(self):
+        changed = False
+        def update_cb(cb, key):
+            is_changed = cb.isChecked() != self.saved_config[key]
+            font = cb.font()
+            font.setBold(is_changed)
+            cb.setFont(font)
+            if is_changed:
+                cb.setStyleSheet("color: #4da6ff;")
+            else:
+                cb.setStyleSheet("")
+            return is_changed
+
+        if update_cb(self.cb_hdr, "enable_hdr"): changed = True
+        if update_cb(self.cb_native, "native_res"): changed = True
+        if update_cb(self.cb_composite, "force_composite"): changed = True
+        
+        self.save_cfg_btn.setEnabled(changed)
+        
+    def _save_config_standalone(self):
+        self._save_config()
+        self.saved_config = {
+            "enable_hdr": self.cb_hdr.isChecked(),
+            "native_res": self.cb_native.isChecked(),
+            "force_composite": self.cb_composite.isChecked()
+        }
+        self._on_config_changed()
+
     def install(self):
+        self._save_config()
         self.run_script("install.sh")
 
     def uninstall(self):

@@ -42,34 +42,36 @@ _running = True
 # Sleep inhibitor (systemd logind delay lock)
 # ---------------------------------------------------------------------------
 
-def _acquire_inhibitor() -> int | None:
-    try:
-        conn = open_dbus_connection(bus="SYSTEM")
-        addr = DBusAddress(
-            "/org/freedesktop/login1",
-            bus_name="org.freedesktop.login1",
-            interface="org.freedesktop.login1.Manager",
-        )
-        msg = new_method_call(
-            addr,
-            "Inhibit",
-            "ssss",
-            ("sleep", "decky-sunshine-res-helper", "Revert display resolution before sleep", "delay"),
-        )
-        reply = conn.send_and_get_reply(msg)
-        # reply.body[0] is a jeepney.wrappers.UnixFd; .fileno() gives the raw fd
-        raw_fd = reply.body[0].fileno()
-        # Duplicate so the jeepney connection closing doesn't steal the fd
-        owned_fd = os.dup(raw_fd)
-        conn.close()
-        log.info("Acquired sleep inhibitor lock (fd=%d)", owned_fd)
-        return owned_fd
-    except ImportError:
-        log.warning("jeepney not installed — sleep inhibitor disabled")
-        return None
-    except Exception as exc:
-        log.warning("Could not acquire sleep inhibitor: %s", exc)
-        return None
+def _acquire_inhibitor(conn) -> int | None:
+    for attempt in range(15):
+        try:
+            addr = DBusAddress(
+                "/org/freedesktop/login1",
+                bus_name="org.freedesktop.login1",
+                interface="org.freedesktop.login1.Manager",
+            )
+            msg = new_method_call(
+                addr,
+                "Inhibit",
+                "ssss",
+                ("sleep", "decky-sunshine-res-helper", "Revert display resolution before sleep", "delay"),
+            )
+            reply = conn.send_and_get_reply(msg)
+            # reply.body[0] is a jeepney.wrappers.UnixFd; .fileno() gives the raw fd
+            raw_fd = reply.body[0].fileno()
+            # Duplicate so the jeepney connection closing doesn't steal the fd
+            owned_fd = os.dup(raw_fd)
+            log.info("Acquired sleep inhibitor lock (fd=%d)", owned_fd)
+            return owned_fd
+        except ImportError:
+            log.warning("jeepney not installed — sleep inhibitor disabled")
+            return None
+        except Exception as exc:
+            if attempt < 14:
+                time.sleep(2)
+            else:
+                log.warning("Could not acquire sleep inhibitor after 30s: %s", exc)
+                return None
 
 
 def _release_inhibitor() -> None:
@@ -277,7 +279,7 @@ def _dbus_listener() -> None:
 
         # Acquire the inhibitor here, after the connection is proven to work,
         # rather than racing at daemon startup before the bus is fully ready.
-        _inhibitor_fd = _acquire_inhibitor()
+        _inhibitor_fd = _acquire_inhibitor(conn)
 
         log.info("DBus listener ready (sleep, shutdown, Sunshine unit)")
 
@@ -384,6 +386,7 @@ def _make_parser() -> argparse.ArgumentParser:
     p.add_argument("--width", type=int)
     p.add_argument("--height", type=int)
     p.add_argument("--refresh-rate", type=int, default=60)
+    p.add_argument("--hdr", type=str, default="false")
     p.add_argument("-d", "--device", type=str, default=None)
     return p
 
@@ -400,10 +403,10 @@ def _handle_command(args: list[str]) -> None:
             log.error("--connect requires --width and --height")
             return
         log.info(
-            "Applying display resolution: %dx%d@%d", parsed.width, parsed.height, parsed.refresh_rate
+            "Applying display resolution: %dx%d@%d, HDR: %s", parsed.width, parsed.height, parsed.refresh_rate, parsed.hdr
         )
         ok = display.connect(
-            parsed.width, parsed.height, parsed.refresh_rate, device=parsed.device
+            parsed.width, parsed.height, parsed.refresh_rate, device=parsed.device, enable_hdr=(parsed.hdr.lower() == "true")
         )
         with _lock:
             if ok:
@@ -414,6 +417,7 @@ def _handle_command(args: list[str]) -> None:
                     parsed.height,
                     parsed.refresh_rate,
                     parsed.device,
+                    parsed.hdr,
                 )
             else:
                 log.error("connect() failed")
@@ -515,13 +519,93 @@ def main() -> None:
     except KeyError:
         target_home = f"/home/{target_user}"
         
-    _fifo_in = f"{target_home}/.sunshine-res-helper.in"
-    _fifo_out = f"{target_home}/.sunshine-res-helper.out"
+    _fifo_in = "/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in"
+    _fifo_out = "/root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"
     
     display.target_user = target_user
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
+
+    # Recover from ungraceful shutdown/reboot:
+    current_boot_id = display._get_boot_id()
+    sunshine_pid = _get_sunshine_pid()
+
+    def _is_stale(state_file: Path, boot_id_idx: int) -> bool:
+        if not state_file.exists():
+            return False
+        lines = state_file.read_text().strip().split("\n")
+        saved_boot_id = lines[boot_id_idx] if len(lines) > boot_id_idx else ""
+        if current_boot_id and saved_boot_id and saved_boot_id != current_boot_id:
+            return True  # From a previous boot
+        return not sunshine_pid  # From this boot, but Sunshine crashed/stopped
+
+    stale_res = _is_stale(display.STEAM_RES_STATE_FILE, 1)
+    stale_fc = _is_stale(display.FC_STATE_FILE, 1)
+    
+    if stale_res or stale_fc:
+        def _delayed_restore():
+            # Read saved values before they are deleted by _restore_steam_settings
+            expected_res = None
+            if stale_res and display.STEAM_RES_STATE_FILE.exists():
+                lines = display.STEAM_RES_STATE_FILE.read_text().strip().split("\n")
+                if lines and lines[0]:
+                    expected_res = lines[0]
+                    
+            expected_fc = None
+            if stale_fc and display.FC_STATE_FILE.exists():
+                lines = display.FC_STATE_FILE.read_text().strip().split("\n")
+                if lines and lines[0]:
+                    expected_fc = lines[0] == "True"
+
+            log.info("Waiting 30 seconds before restoring stale Steam settings to ensure Steam UI is fully loaded...")
+            time.sleep(30)
+            
+            for attempt in range(15):
+                display._restore_steam_settings()
+                
+                needs_res = stale_res and display.STEAM_RES_STATE_FILE.exists()
+                needs_fc = stale_fc and display.FC_STATE_FILE.exists()
+                
+                if not needs_res and not needs_fc:
+                    break
+                    
+                log.info("Steam might not be ready yet. Retrying in 20 seconds...")
+                time.sleep(20)
+            else:
+                log.error("Failed to push initial stale Steam settings after 5 minutes. Giving up.")
+                return
+
+            # Wait 120 seconds to see if Steam reverted them during boot
+            time.sleep(120)
+            
+            from src import steam_settings
+            
+            if expected_res is not None:
+                current_res = steam_settings.read_global_resolution(display.target_user)
+                if current_res != expected_res:
+                    log.warning(f"Steam overwrote Maximum Game Resolution during boot. Re-applying '{expected_res}'...")
+                    steam_settings.write_global_resolution(expected_res, display.target_user)
+                    
+            if expected_fc is not None:
+                current_fc = steam_settings.read_force_composite(display.target_user)
+                if current_fc != expected_fc:
+                    log.warning(f"Steam overwrote Force Composite during boot. Re-applying '{expected_fc}'...")
+                    steam_settings.write_force_composite(expected_fc, display.target_user)
+                    
+            # Ensure state files are deleted just in case
+            if display.STEAM_RES_STATE_FILE.exists():
+                display.STEAM_RES_STATE_FILE.unlink()
+            if display.FC_STATE_FILE.exists():
+                display.FC_STATE_FILE.unlink()
+
+        log.info("Found stale Steam settings (likely from a previous boot/crash). Spawning delayed restore thread...")
+        threading.Thread(target=_delayed_restore, daemon=True).start()
+
+    stale_virt = display.SCRIPT_DIR / "virt_display.state"
+    if _is_stale(stale_virt, 4):
+        log.info("Cleaning up stale virtual display state file...")
+        stale_virt.unlink()
 
     sleep_thread = threading.Thread(target=_dbus_listener, daemon=True, name="dbus-listener")
     sleep_thread.start()
