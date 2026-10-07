@@ -42,9 +42,20 @@ _running = True
 # Sleep inhibitor (systemd logind delay lock)
 # ---------------------------------------------------------------------------
 
-def _acquire_inhibitor(conn) -> int | None:
+_inhibitor_conn = None
+
+def _acquire_inhibitor() -> int | None:
+    global _inhibitor_conn
+    if _inhibitor_conn is not None:
+        try:
+            _inhibitor_conn.close()
+        except Exception:
+            pass
+        _inhibitor_conn = None
+
     for attempt in range(15):
         try:
+            conn = open_dbus_connection(bus="SYSTEM")
             addr = DBusAddress(
                 "/org/freedesktop/login1",
                 bus_name="org.freedesktop.login1",
@@ -61,6 +72,9 @@ def _acquire_inhibitor(conn) -> int | None:
             raw_fd = reply.body[0].fileno()
             # Duplicate so the jeepney connection closing doesn't steal the fd
             owned_fd = os.dup(raw_fd)
+            
+            # Keep the DBus connection open! logind drops the lock if the connection closes.
+            _inhibitor_conn = conn
             log.info("Acquired sleep inhibitor lock (fd=%d)", owned_fd)
             return owned_fd
         except ImportError:
@@ -75,7 +89,7 @@ def _acquire_inhibitor(conn) -> int | None:
 
 
 def _release_inhibitor() -> None:
-    global _inhibitor_fd
+    global _inhibitor_fd, _inhibitor_conn
     if _inhibitor_fd is not None:
         try:
             os.close(_inhibitor_fd)
@@ -83,6 +97,13 @@ def _release_inhibitor() -> None:
         except OSError:
             pass
         _inhibitor_fd = None
+
+    if _inhibitor_conn is not None:
+        try:
+            _inhibitor_conn.close()
+        except Exception:
+            pass
+        _inhibitor_conn = None
 
 
 # ---------------------------------------------------------------------------
@@ -277,9 +298,8 @@ def _dbus_listener() -> None:
         except Exception as exc:
             log.warning("Could not subscribe to systemd signals: %s", exc)
 
-        # Acquire the inhibitor here, after the connection is proven to work,
-        # rather than racing at daemon startup before the bus is fully ready.
-        _inhibitor_fd = _acquire_inhibitor(conn)
+        # Acquire the inhibitor on a separate dedicated connection
+        _inhibitor_fd = _acquire_inhibitor()
 
         log.info("DBus listener ready (sleep, shutdown, Sunshine unit)")
 
