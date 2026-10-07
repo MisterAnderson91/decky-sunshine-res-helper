@@ -6,6 +6,15 @@ It runs as a persistent daemon and automatically manages display connections by 
 
 > ⚠️ If your monitor or TV screen ever gets stuck on "Invalid format" or similar, just hard reboot your device and it will clear the override.
 
+## Features
+
+- **Perfect Stream Resolution**: Generates custom EDIDs on-the-fly to exactly match your Moonlight client's resolution and refresh rate.
+- **HDR Support**: Automatically toggles HDR capability on the host based on the client's display.
+- **Steam UI Integration**: Temporarily overrides Steam's "Maximum Game Resolution" setting so games render at the client's native resolution without manual configuration.
+- **Resilient & Safe**: Automatically restores your physical display when you disconnect, if Sunshine crashes, if the network drops, or before the Steam Deck goes to sleep.
+- **Easy Installation**: Ships as a standalone graphical AppImage for one-click installation and updates.
+- **Gamescope Native**: Deep integration with SteamOS via debugfs and `gamescopectl` for seamless display transitions.
+
 ## Requirements
 
 - Python 3
