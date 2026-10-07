@@ -8,7 +8,7 @@ import ssl
 from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QPushButton, QLabel, QMessageBox, QHBoxLayout, QDialog, QTextEdit)
+                             QPushButton, QLabel, QMessageBox, QHBoxLayout, QDialog, QTextEdit, QCheckBox)
 
 class UpdateCheckerThread(QThread):
     update_checked = pyqtSignal(str, str)
