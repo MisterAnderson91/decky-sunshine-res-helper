@@ -85,25 +85,37 @@ class InstallerApp(QMainWindow):
         adv_layout.setContentsMargins(10, 0, 0, 0)
         
         self.config_path = os.path.expanduser("~/.local/share/decky-sunshine-res-helper/config.json")
-        config = {"enable_hdr": True, "native_res": True, "force_composite": True}
+        self.default_config = {"enable_hdr": True, "native_res": True, "force_composite": False}
+        self.saved_config = self.default_config.copy()
+        
         if os.path.exists(self.config_path):
             try:
                 with open(self.config_path, "r") as f:
-                    config.update(json.load(f))
+                    self.saved_config.update(json.load(f))
             except Exception:
                 pass
                 
         self.cb_hdr = QCheckBox("Enable HDR Support")
-        self.cb_hdr.setChecked(config.get("enable_hdr", True))
+        self.cb_hdr.setChecked(self.saved_config["enable_hdr"])
         adv_layout.addWidget(self.cb_hdr)
         
         self.cb_native = QCheckBox("Set Maximum Game Resolution to Native")
-        self.cb_native.setChecked(config.get("native_res", True))
+        self.cb_native.setChecked(self.saved_config["native_res"])
         adv_layout.addWidget(self.cb_native)
         
         self.cb_composite = QCheckBox("Force Composite (Fixes Black Screen)")
-        self.cb_composite.setChecked(config.get("force_composite", True))
+        self.cb_composite.setChecked(self.saved_config["force_composite"])
         adv_layout.addWidget(self.cb_composite)
+        
+        self.save_cfg_btn = QPushButton("Save Configuration")
+        self.save_cfg_btn.setStyleSheet("background-color: #2a82da; color: white; padding: 5px;")
+        self.save_cfg_btn.hide()
+        self.save_cfg_btn.clicked.connect(self._save_config_standalone)
+        adv_layout.addWidget(self.save_cfg_btn)
+        
+        self.cb_hdr.toggled.connect(self._on_config_changed)
+        self.cb_native.toggled.connect(self._on_config_changed)
+        self.cb_composite.toggled.connect(self._on_config_changed)
         
         self.layout.addWidget(self.adv_btn)
         self.layout.addWidget(self.adv_widget)
@@ -301,6 +313,35 @@ class InstallerApp(QMainWindow):
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, "w") as f:
             json.dump(config, f)
+            
+    def _on_config_changed(self):
+        changed = False
+        def update_cb(cb, key):
+            is_changed = cb.isChecked() != self.saved_config[key]
+            font = cb.font()
+            font.setBold(is_changed)
+            cb.setFont(font)
+            if is_changed:
+                cb.setStyleSheet("color: #4da6ff;")
+            else:
+                cb.setStyleSheet("")
+            return is_changed
+
+        if update_cb(self.cb_hdr, "enable_hdr"): changed = True
+        if update_cb(self.cb_native, "native_res"): changed = True
+        if update_cb(self.cb_composite, "force_composite"): changed = True
+        
+        self.save_cfg_btn.setVisible(changed)
+        
+    def _save_config_standalone(self):
+        self._save_config()
+        self.saved_config = {
+            "enable_hdr": self.cb_hdr.isChecked(),
+            "native_res": self.cb_native.isChecked(),
+            "force_composite": self.cb_composite.isChecked()
+        }
+        self._on_config_changed()
+        QMessageBox.information(self, "Configuration Saved", "Advanced options have been saved instantly.\\nThey will apply on your next Moonlight connection.")
 
     def install(self):
         self._save_config()

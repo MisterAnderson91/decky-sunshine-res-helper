@@ -29,7 +29,7 @@ target_user = "deck"
 
 def _get_config() -> dict:
     import json
-    cfg = {"enable_hdr": True, "native_res": True, "force_composite": True}
+    cfg = {"enable_hdr": True, "native_res": True, "force_composite": False}
     try:
         if CONFIG_FILE.exists():
             cfg.update(json.loads(CONFIG_FILE.read_text()))
