@@ -384,6 +384,7 @@ def _make_parser() -> argparse.ArgumentParser:
     p.add_argument("--width", type=int)
     p.add_argument("--height", type=int)
     p.add_argument("--refresh-rate", type=int, default=60)
+    p.add_argument("--hdr", type=str, default="false")
     p.add_argument("-d", "--device", type=str, default=None)
     return p
 
@@ -400,10 +401,10 @@ def _handle_command(args: list[str]) -> None:
             log.error("--connect requires --width and --height")
             return
         log.info(
-            "Applying display resolution: %dx%d@%d", parsed.width, parsed.height, parsed.refresh_rate
+            "Applying display resolution: %dx%d@%d, HDR: %s", parsed.width, parsed.height, parsed.refresh_rate, parsed.hdr
         )
         ok = display.connect(
-            parsed.width, parsed.height, parsed.refresh_rate, device=parsed.device
+            parsed.width, parsed.height, parsed.refresh_rate, device=parsed.device, enable_hdr=(parsed.hdr.lower() == "true")
         )
         with _lock:
             if ok:
@@ -414,6 +415,7 @@ def _handle_command(args: list[str]) -> None:
                     parsed.height,
                     parsed.refresh_rate,
                     parsed.device,
+                    parsed.hdr,
                 )
             else:
                 log.error("connect() failed")

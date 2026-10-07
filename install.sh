@@ -84,7 +84,7 @@ MODE = sys.argv[2]
 if not os.path.exists(CONF_PATH):
     print(f'Sunshine config not found at {CONF_PATH}, skipping automation.')
     sys.exit(0)
-do_cmd = 'sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
+do_cmd = 'sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS},--hdr,\${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
 undo_cmd = 'sh -c \"echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\"'
 our_cmd_obj = {'do': do_cmd, 'undo': undo_cmd}
 def is_our_cmd(cmd):
@@ -123,7 +123,7 @@ echo "provided here in case they weren't added automatically (or if you"
 echo "need to copy them manually):"
 echo ""
 echo "Do Command:"
-echo "sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\""
+echo "sh -c \"echo --connect,--width,\${SUNSHINE_CLIENT_WIDTH},--height,\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\${SUNSHINE_CLIENT_FPS},--hdr,\${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\""
 echo ""
 echo "Undo Command:"
 echo "sh -c \"echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out\""

@@ -164,7 +164,7 @@ class InstallerApp(QMainWindow):
         
     def show_commands(self):
         home = os.path.expanduser("~")
-        do_cmd = 'sh -c "echo --connect,--width,\\${SUNSHINE_CLIENT_WIDTH},--height,\\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\\${SUNSHINE_CLIENT_FPS} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
+        do_cmd = 'sh -c "echo --connect,--width,\\${SUNSHINE_CLIENT_WIDTH},--height,\\${SUNSHINE_CLIENT_HEIGHT},--refresh-rate,\\${SUNSHINE_CLIENT_FPS},--hdr,\\${SUNSHINE_CLIENT_HDR} > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
         undo_cmd = 'sh -c "echo --disconnect > /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.in && cat /root/.var/app/dev.lizardbyte.app.Sunshine/config/sunshine/.sunshine-res-helper.out"'
         
         dialog = QDialog(self)

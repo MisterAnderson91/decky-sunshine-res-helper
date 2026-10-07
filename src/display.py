@@ -110,7 +110,7 @@ def _get_target_uid() -> int:
     except KeyError:
         return 1000
 
-def connect(width: int, height: int, refresh_rate: int, device: str | None = None) -> bool:
+def connect(width: int, height: int, refresh_rate: int, device: str | None = None, enable_hdr: bool = False) -> bool:
     """
     Connect a virtual display:
     1. Generate custom EDID
@@ -148,7 +148,7 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
         width=width,
         height=height,
         refresh_rate=refresh_rate,
-        enable_hdr=False,
+        enable_hdr=enable_hdr,
         display_name="Virtual Display",
     )
     edid_file = SCRIPT_DIR / "custom_edid.bin"
