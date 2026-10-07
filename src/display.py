@@ -125,7 +125,7 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
         width=width,
         height=height,
         refresh_rate=refresh_rate,
-        enable_hdr=True,
+        enable_hdr=False,
         display_name="Virtual Display",
     )
     edid_file = SCRIPT_DIR / "custom_edid.bin"
