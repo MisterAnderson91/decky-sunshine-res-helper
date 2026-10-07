@@ -60,7 +60,7 @@ class InstallerApp(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(title_label)
         
-        rc_label = QLabel("Release Candidate 3")
+        rc_label = QLabel("Release Candidate 4")
         rc_label.setStyleSheet("color: #aaaaaa; font-style: italic;")
         rc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(rc_label)
