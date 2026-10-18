@@ -644,9 +644,13 @@ def main() -> None:
             if data:
                 args = data.decode("utf-8").strip().split(",")
                 log.info("Received command: %s", args)
-                _handle_command(args)
-                
-                # Unblock the client by writing to FIFO_OUT
+                try:
+                    _handle_command(args)
+                except Exception:
+                    log.exception("Command failed: %s", args)
+
+                # Always unblock the client by writing to FIFO_OUT, even if the
+                # command failed, or Sunshine's prep command hangs forever
                 try:
                     # Retry opening for up to 1 second in case the reader hasn't started yet
                     # O_NONBLOCK prevents us from blocking forever if the reader never starts
