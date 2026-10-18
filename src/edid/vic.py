@@ -4,6 +4,8 @@ CEA-861 Video Identification Code (VIC) standard resolutions and lookup.
 
 from __future__ import annotations
 
+import re
+
 # Format: VIC: (width, height, refresh_rate, name)
 VIC_RESOLUTIONS = {
     1: (640, 480, 60, "DMT0659"),
@@ -166,53 +168,59 @@ VIC_RESOLUTIONS = {
 VIC_RESOLUTIONS: dict[int, tuple[int, int, int, str]]
 
 
-def find_best_vic_resolution(
+def _is_interlaced(name: str) -> bool:
+    return re.search(r"\d+i(\d|$|H)", name) is not None  # e.g. "1080i60"
+
+
+def find_exact_vic(width: int, height: int, refresh_rate: int) -> int | None:
+    """
+    Find a progressive VIC that exactly matches the requested mode.
+    VICs are referenced by code in the CTA Video Data Block, so unlike a
+    detailed timing descriptor they are not bound by its clock or size limits.
+
+    Returns:
+        The VIC code, or None if no exact progressive match exists
+    """
+    for vic, (w, h, r, name) in VIC_RESOLUTIONS.items():
+        if (w, h, r) == (width, height, refresh_rate) and not _is_interlaced(name):
+            return vic
+
+    return None
+
+
+def rank_fallback_modes(
     target_width: int,
     target_height: int,
     target_refresh: int,
-) -> tuple[int, int, int, int, str] | None:
+) -> list[tuple[int, int, int, int | None]]:
     """
-    Find the next best VIC resolution from the standard list.
+    Rank the standard progressive VIC modes as fallbacks for a mode that the EDID
+    can't express or the driver rejected, best first.
     Prioritizes: 1) Refresh rate, 2) Resolution, 3) Aspect ratio
 
     Returns:
-        Tuple of (width, height, refresh_rate, vic_code, name) or None
+        List of (width, height, refresh_rate, vic). vic is None when the mode fits
+        in a detailed timing, otherwise the VIC to advertise it as.
     """
     from src.edid.timing import check_if_calculation_breaks
 
     target_pixels = target_width * target_height
     target_aspect = target_width / target_height
 
-    candidates = []
+    scored: dict[tuple[int, int, int], tuple[float, int | None]] = {}
 
     for vic, (width, height, refresh, name) in VIC_RESOLUTIONS.items():
-        pixels = width * height
-        aspect = width / height
-
-        if check_if_calculation_breaks(width, height, refresh):
+        mode = (width, height, refresh)
+        if _is_interlaced(name) or mode in scored or mode == (target_width, target_height, target_refresh):
             continue
 
-        refresh_diff = abs(refresh - target_refresh)
-        resolution_diff = abs(pixels - target_pixels) / target_pixels
-        aspect_diff = abs(aspect - target_aspect)
-        aspect_penalty = aspect_diff * 500
+        refresh_diff = abs(refresh - target_refresh) / target_refresh
+        resolution_diff = abs(width * height - target_pixels) / target_pixels
+        aspect_diff = abs(width / height - target_aspect)
+        aspect_penalty = aspect_diff * 0.5 + max(0.0, aspect_diff - 0.3) * 2
 
-        if aspect_diff > 0.3:
-            aspect_penalty += (aspect_diff - 0.3) * 2000
+        score = refresh_diff * 2 + resolution_diff + aspect_penalty
+        scored[mode] = (score, vic if check_if_calculation_breaks(*mode) else None)
 
-        score = (refresh_diff * 100000) + (resolution_diff * 1000) + aspect_penalty
-        candidates.append((vic, score, width, height, refresh, name, aspect))
-
-    candidates.sort(key=lambda x: x[1])
-
-    if candidates:
-        best = candidates[0]
-        vic, score, width, height, refresh, name, aspect = best
-        print(f"\nBest VIC match: VIC {vic} - {name}")
-        print(f"  Resolution: {width}x{height} @ {refresh}Hz (aspect: {aspect:.2f})")
-        print(
-            f"  Requested:  {target_width}x{target_height} @ {target_refresh}Hz (aspect: {target_aspect:.2f})"
-        )
-        return (width, height, refresh, vic, name)
-
-    return None
+    ranked = sorted(scored.items(), key=lambda item: item[1][0])
+    return [(w, h, r, vic) for (w, h, r), (_, vic) in ranked]

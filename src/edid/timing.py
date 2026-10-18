@@ -12,8 +12,9 @@ def calculate_checksum(data: bytes | bytearray) -> int:
 
 def check_if_calculation_breaks(width: int, height: int, refresh_rate: int) -> bool:
     """
-    Check if the given resolution/refresh rate combination would exceed
-    the EDID pixel clock limit (655.35 MHz).
+    Check if the given resolution/refresh rate combination can't be expressed
+    as a detailed timing: over the pixel clock limit (655.35 MHz), or wider or
+    taller than the 12-bit active pixel fields allow (4095).
     Returns True if it would break.
     """
     h_blank = max(80, int(width * 0.08))
@@ -22,7 +23,7 @@ def check_if_calculation_breaks(width: int, height: int, refresh_rate: int) -> b
     pixel_clock_hz = h_total * (height + v_blank_estimate) * refresh_rate
     pixel_clock = int(pixel_clock_hz / 10000)
 
-    return pixel_clock > 65535
+    return pixel_clock > 65535 or width > 4095 or height > 4095
 
 
 def get_pixel_clock_info(width: int, height: int, refresh_rate: int) -> tuple[float, float, bool]:
@@ -40,4 +41,5 @@ def get_pixel_clock_info(width: int, height: int, refresh_rate: int) -> tuple[fl
     pixel_clock_mhz = pixel_clock_hz / 1000000
     max_mhz = max_pixel_clock * 10000 / 1000000
 
-    return (pixel_clock_mhz, max_mhz, pixel_clock > max_pixel_clock)
+    would_break = pixel_clock > max_pixel_clock or width > 4095 or height > 4095
+    return (pixel_clock_mhz, max_mhz, would_break)
