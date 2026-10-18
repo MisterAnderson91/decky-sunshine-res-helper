@@ -16,7 +16,7 @@ from src.drm import (
 )
 
 log = logging.getLogger(__name__)
-from src.edid import create_edid, find_best_vic_resolution, find_exact_vic, get_pixel_clock_info
+from src.edid import create_edid, find_exact_vic, find_hf_vsdb, get_pixel_clock_info, rank_fallback_modes
 from src import steam_settings
 
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
@@ -24,6 +24,9 @@ STEAM_RES_STATE_FILE = SCRIPT_DIR / "gamescope_game_resolution_global.state"
 FC_STATE_FILE = SCRIPT_DIR / "gamescope_force_composite.state"
 HDR_STATE_FILE = SCRIPT_DIR / "gamescope_hdr_enabled.state"
 CONFIG_FILE = SCRIPT_DIR / "config.conf"
+
+# Modes to try (requested + fallbacks) before giving up; each costs about a second
+MAX_MODE_ATTEMPTS = 4
 
 target_user = "deck"
 
@@ -156,35 +159,12 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
             time.sleep(0.5)
         state_file.unlink()
 
-    # Step 1: Generate custom EDID
-    log.info("Step 1: Generating custom EDID...")
-    pixel_clock_mhz, max_mhz, will_break = get_pixel_clock_info(width, height, refresh_rate)
-    exact_vic = find_exact_vic(width, height, refresh_rate) if will_break else None
-    if exact_vic:
-        log.info(
-            f"  {width}x{height}@{refresh_rate}Hz exceeds the {max_mhz:.0f} MHz DTD limit, "
-            f"advertising it as CTA VIC {exact_vic} (YCbCr 4:2:0 capable)"
-        )
-    elif will_break:
-        vic_result = find_best_vic_resolution(width, height, refresh_rate)
-        if vic_result:
-            vic_width, vic_height, vic_refresh, vic_code, vic_name = vic_result
-            width, height, refresh_rate = vic_width, vic_height, vic_refresh
+    # Step 1: Plan which modes to try
+    log.info("Step 1: Planning display modes...")
+    candidates = _plan_modes(width, height, refresh_rate)[:MAX_MODE_ATTEMPTS]
 
     config = _get_config()
     final_hdr = enable_hdr and config.get("enable_hdr", True)
-    
-    edid_data = create_edid(
-        width=width,
-        height=height,
-        refresh_rate=refresh_rate,
-        enable_hdr=final_hdr,
-        display_name="Virtual Display",
-        vic=exact_vic,
-    )
-    edid_file = SCRIPT_DIR / "custom_edid.bin"
-    _ = edid_file.write_bytes(edid_data)
-    log.info(f"  ✓ Created EDID file: {edid_file}")
 
     # Step 2 & 3: Find actively rendering display
     log.info("Step 2 & 3: Finding actively rendering display...")
@@ -217,31 +197,99 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
         else:
             log.warning(f"  No original EDID found for {active_port} and no tv_edid.bin fallback exists!")
 
+    # The physical display's HDMI link capabilities (max TMDS, FRL, DSC), so modes
+    # advertised as VICs aren't limited to HDMI 2.0 by our own EDID
+    hf_vsdb = None
+    if backup_edid_file.exists():
+        hf_vsdb = find_hf_vsdb(backup_edid_file.read_bytes())
+    if hf_vsdb:
+        log.info(f"  ✓ Using the display's HDMI link capabilities: {hf_vsdb.hex(' ')}")
+
     # Step 4b: Save Steam's Maximum Game Resolution and switch it to Native
     log.info("Step 4b: Saving Steam UI settings and conditionally applying streaming overrides...")
     _override_steam_settings(config)
 
-    # Step 5: Drop EDID cache by forcing disconnect
-    log.info(f"Step 5: Forcing disconnect on ({active_port})...")
     status_path = f"/sys/class/drm/{card_name}-{active_port}/status"
-    _ = run_command(f"sh -c 'echo off > {status_path}'")
-    time.sleep(0.5)
-
-    # Step 6: Override EDID and force ON
-    log.info(f"Step 6: Overriding EDID and forcing {active_port} ON...")
     edid_override_path = slot_device / active_port / "edid_override"
-    _ = run_command(f"sh -c 'cat {edid_file.absolute()} > {edid_override_path}'")
-    _ = run_command(f"sh -c 'echo on > {status_path}'")
-    time.sleep(0.5)
-    _ = state_file.write_text(f"{card_name}\n{active_port}\n{edid_override_path}\n{backup_edid_file}\n{_get_boot_id()}\n")
-    
+    edid_file = SCRIPT_DIR / "custom_edid.bin"
+
+    accepted = False
+    for attempt, (mode_width, mode_height, mode_refresh, vic) in enumerate(candidates, start=1):
+        mode = f"{mode_width}x{mode_height}@{mode_refresh}Hz" + (f" (CTA VIC {vic})" if vic else "")
+        log.info(f"Attempt {attempt}/{len(candidates)}: {mode}")
+
+        edid_data = create_edid(
+            width=mode_width,
+            height=mode_height,
+            refresh_rate=mode_refresh,
+            enable_hdr=final_hdr,
+            display_name="Virtual Display",
+            vic=vic,
+            hf_vsdb=hf_vsdb,
+        )
+        _ = edid_file.write_bytes(edid_data)
+
+        # Step 5: Drop EDID cache by forcing disconnect
+        log.info(f"Step 5: Forcing disconnect on ({active_port})...")
+        _ = run_command(f"sh -c 'echo off > {status_path}'")
+        time.sleep(0.5)
+
+        # Step 6: Override EDID and force ON
+        log.info(f"Step 6: Overriding EDID and forcing {active_port} ON...")
+        _ = run_command(f"sh -c 'cat {edid_file.absolute()} > {edid_override_path}'")
+        _ = run_command(f"sh -c 'echo on > {status_path}'")
+        time.sleep(0.5)
+        _ = state_file.write_text(f"{card_name}\n{active_port}\n{edid_override_path}\n{backup_edid_file}\n{_get_boot_id()}\n")
+
+        # The driver drops modes it can't drive over the real link (HDMI TMDS/FRL,
+        # DP bandwidth), so only hand Gamescope an EDID whose mode survived
+        if _driver_lists_mode(card_name, active_port, mode_width, mode_height):
+            log.info(f"  ✓ Driver accepted {mode}")
+            accepted = True
+            break
+        log.warning(f"  Driver rejected {mode} on {active_port}")
+
+    if not accepted:
+        log.error("No mode was accepted by the driver — restoring the original display")
+        _ = disconnect()
+        return False
+
     # Force Gamescope to rescan the backend to trigger the display switch
-    log.info("Step 6: Triggering Gamescope backend rescan...")
+    log.info("Step 7: Triggering Gamescope backend rescan...")
     target_uid = _get_target_uid()
     _ = run_command(f"sudo -u {target_user} XDG_RUNTIME_DIR=/run/user/{target_uid} gamescopectl backend_set_dirty")
     
     log.info(f"✓ Display override successfully applied on {card_name}-{active_port}")
     return True
+
+
+def _plan_modes(width: int, height: int, refresh_rate: int) -> list[tuple[int, int, int, int | None]]:
+    """
+    The modes to try, in order: the requested mode (as a detailed timing, or as a
+    CTA VIC if a detailed timing can't express it), then ranked fallbacks.
+    Each entry is (width, height, refresh_rate, vic), with vic None for a detailed timing.
+    """
+    _, _, needs_vic = get_pixel_clock_info(width, height, refresh_rate)
+    if not needs_vic:
+        return [(width, height, refresh_rate, None)] + rank_fallback_modes(width, height, refresh_rate)
+
+    vic = find_exact_vic(width, height, refresh_rate)
+    if vic:
+        log.info(f"  {width}x{height}@{refresh_rate}Hz can't be a detailed timing, advertising it as CTA VIC {vic}")
+        return [(width, height, refresh_rate, vic)] + rank_fallback_modes(width, height, refresh_rate)
+
+    log.warning(f"  {width}x{height}@{refresh_rate}Hz can't be a detailed timing and has no CTA VIC — using fallbacks")
+    return rank_fallback_modes(width, height, refresh_rate)
+
+
+def _driver_lists_mode(card_name: str, port: str, width: int, height: int) -> bool:
+    """Whether the driver kept a width x height mode after validating it against the output link."""
+    try:
+        modes = Path(f"/sys/class/drm/{card_name}-{port}/modes").read_text().split()
+    except OSError as exc:
+        log.warning(f"  Could not read modes for {card_name}-{port}: {exc}")
+        return False
+    return f"{width}x{height}" in modes
 
 
 def disconnect() -> bool:

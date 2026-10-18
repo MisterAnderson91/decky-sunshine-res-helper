@@ -16,6 +16,7 @@ def create_edid(
     enable_hdr: bool = False,
     display_name: str = "Custom Display",
     vic: int | None = None,
+    hf_vsdb: bytes | None = None,
 ) -> bytes:
     """
     Create EDID with custom settings.
@@ -29,6 +30,9 @@ def create_edid(
         vic: Advertise the mode as this CTA VIC instead of a detailed timing.
             Used for modes over the 655.35 MHz DTD limit (e.g. 4K120). The VIC
             is also marked YCbCr 4:2:0 capable so it fits HDMI's 600 MHz TMDS.
+        hf_vsdb: The physical sink's HDMI Forum VSDB. Used with vic so the virtual
+            display claims the real link's capabilities (TMDS, FRL, DSC) instead
+            of the HDMI 2.0 defaults below.
     """
 
     # EDID structure (128 bytes base block + 128 bytes CEA extension)
@@ -94,54 +98,59 @@ def create_edid(
     edid[38:54] = [0x01, 0x01] * 8
 
     # Detailed timing descriptor 1 (18 bytes) — custom resolution
-    h_active = width
-    v_active = height
-    h_blank = max(80, int(width * 0.08))
-    h_total = h_active + h_blank
+    # A VIC mode can't be expressed as a DTD (655.35 MHz clock, 4095 px limits),
+    # so a dummy descriptor takes its place and the VIC is the only advertised mode.
+    if vic is None:
+        h_active = width
+        v_active = height
+        h_blank = max(80, int(width * 0.08))
+        h_total = h_active + h_blank
 
-    v_blank_estimate = max(23, int(height * 0.025))
-    pixel_clock_hz = h_total * (v_active + v_blank_estimate) * refresh_rate
+        v_blank_estimate = max(23, int(height * 0.025))
+        pixel_clock_hz = h_total * (v_active + v_blank_estimate) * refresh_rate
 
-    v_blank = int((pixel_clock_hz / (h_total * refresh_rate)) - v_active)
-    v_blank = max(23, v_blank)
+        v_blank = int((pixel_clock_hz / (h_total * refresh_rate)) - v_active)
+        v_blank = max(23, v_blank)
 
-    pixel_clock_hz = h_total * (v_active + v_blank) * refresh_rate
-    pixel_clock = min(int(pixel_clock_hz / 10000), 65535)
-    edid[54:56] = struct.pack("<H", pixel_clock)
+        pixel_clock_hz = h_total * (v_active + v_blank) * refresh_rate
+        pixel_clock = min(int(pixel_clock_hz / 10000), 65535)
+        edid[54:56] = struct.pack("<H", pixel_clock)
 
-    edid[56] = h_active & 0xFF
-    edid[57] = h_blank & 0xFF
-    edid[58] = ((h_active >> 8) << 4) | (h_blank >> 8)
+        edid[56] = h_active & 0xFF
+        edid[57] = h_blank & 0xFF
+        edid[58] = ((h_active >> 8) << 4) | (h_blank >> 8)
 
-    edid[59] = v_active & 0xFF
-    edid[60] = v_blank & 0xFF
-    edid[61] = ((v_active >> 8) << 4) | (v_blank >> 8)
+        edid[59] = v_active & 0xFF
+        edid[60] = v_blank & 0xFF
+        edid[61] = ((v_active >> 8) << 4) | (v_blank >> 8)
 
-    h_sync_offset = int(h_blank * 0.2)
-    h_sync_width = int(h_blank * 0.4)
-    v_sync_offset = 2
-    v_sync_width = 6
+        h_sync_offset = int(h_blank * 0.2)
+        h_sync_width = int(h_blank * 0.4)
+        v_sync_offset = 2
+        v_sync_width = 6
 
-    edid[62] = h_sync_offset & 0xFF
-    edid[63] = h_sync_width & 0xFF
-    edid[64] = ((v_sync_offset & 0x0F) << 4) | (v_sync_width & 0x0F)
-    edid[65] = (
-        (((h_sync_offset >> 8) & 0x03) << 6)
-        | (((h_sync_width >> 8) & 0x03) << 4)
-        | (((v_sync_offset >> 4) & 0x03) << 2)
-        | ((v_sync_width >> 4) & 0x03)
-    )
+        edid[62] = h_sync_offset & 0xFF
+        edid[63] = h_sync_width & 0xFF
+        edid[64] = ((v_sync_offset & 0x0F) << 4) | (v_sync_width & 0x0F)
+        edid[65] = (
+            (((h_sync_offset >> 8) & 0x03) << 6)
+            | (((h_sync_width >> 8) & 0x03) << 4)
+            | (((v_sync_offset >> 4) & 0x03) << 2)
+            | ((v_sync_width >> 4) & 0x03)
+        )
 
-    # Image size (mm)
-    h_size_mm = h_size_cm * 10
-    v_size_mm = v_size_cm * 10
-    edid[66] = h_size_mm & 0xFF
-    edid[67] = v_size_mm & 0xFF
-    edid[68] = ((h_size_mm >> 8) << 4) | (v_size_mm >> 8)
+        # Image size (mm)
+        h_size_mm = h_size_cm * 10
+        v_size_mm = v_size_cm * 10
+        edid[66] = h_size_mm & 0xFF
+        edid[67] = v_size_mm & 0xFF
+        edid[68] = ((h_size_mm >> 8) << 4) | (v_size_mm >> 8)
 
-    edid[69] = 0     # H border
-    edid[70] = 0     # V border
-    edid[71] = 0x18  # Non-interlaced, digital separate sync
+        edid[69] = 0     # H border
+        edid[70] = 0     # V border
+        edid[71] = 0x18  # Non-interlaced, digital separate sync
+    else:
+        edid[54:72] = [0x00, 0x00, 0x00, 0x10, 0x00] + [0x00] * 13
 
     # Display product name descriptor
     name_bytes = display_name[:13].encode("ascii")
@@ -162,11 +171,6 @@ def create_edid(
 
     # Dummy descriptor
     edid[108:126] = [0x00, 0x00, 0x00, 0x10, 0x00] + [0x00] * 13
-
-    # A VIC mode can't be expressed as a DTD, so replace it with a dummy
-    # descriptor. The VIC is then the only mode the display advertises.
-    if vic is not None:
-        edid[54:72] = [0x00, 0x00, 0x00, 0x10, 0x00] + [0x00] * 13
 
     # Extension flag
     edid[126] = 1  # 1 extension block
@@ -220,19 +224,23 @@ def create_edid(
     offset += 3
 
     # HDMI Forum Vendor Specific Data Block
-    edid[offset] = 0x67
-    edid[offset + 1] = 0xD8  # IEEE OUI for HDMI Forum
-    edid[offset + 2] = 0x5D
-    edid[offset + 3] = 0xC4
-    edid[offset + 4] = 0x01  # Version
-    edid[offset + 5] = 0x78  # Max TMDS: 600 MHz
-    edid[offset + 6] = 0x00
-    edid[offset + 7] = 0x00
-    if vic is not None:
-        edid[offset + 6] = 0x88  # SCDC present, scrambling (needed above 340 MHz)
-        if enable_hdr:
-            edid[offset + 7] = 0x01  # 10-bit YCbCr 4:2:0
-    offset += 8
+    if vic is not None and hf_vsdb:
+        edid[offset:offset + len(hf_vsdb)] = hf_vsdb
+        offset += len(hf_vsdb)
+    else:
+        edid[offset] = 0x67
+        edid[offset + 1] = 0xD8  # IEEE OUI for HDMI Forum
+        edid[offset + 2] = 0x5D
+        edid[offset + 3] = 0xC4
+        edid[offset + 4] = 0x01  # Version
+        edid[offset + 5] = 0x78  # Max TMDS: 600 MHz
+        edid[offset + 6] = 0x00
+        edid[offset + 7] = 0x00
+        if vic is not None:
+            edid[offset + 6] = 0x88  # SCDC present, scrambling (needed above 340 MHz)
+            if enable_hdr:
+                edid[offset + 7] = 0x01  # 10-bit YCbCr 4:2:0
+        offset += 8
 
     # DTD offset
     edid[cea_start + 2] = offset - cea_start
