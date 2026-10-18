@@ -15,6 +15,7 @@ def create_edid(
     refresh_rate: int = 60,
     enable_hdr: bool = False,
     display_name: str = "Custom Display",
+    vic: int | None = None,
 ) -> bytes:
     """
     Create EDID with custom settings.
@@ -25,6 +26,9 @@ def create_edid(
         refresh_rate: Refresh rate in Hz
         enable_hdr: Enable HDR support
         display_name: Display product name (max 13 chars)
+        vic: Advertise the mode as this CTA VIC instead of a detailed timing.
+            Used for modes over the 655.35 MHz DTD limit (e.g. 4K120). The VIC
+            is also marked YCbCr 4:2:0 capable so it fits HDMI's 600 MHz TMDS.
     """
 
     # EDID structure (128 bytes base block + 128 bytes CEA extension)
@@ -159,6 +163,11 @@ def create_edid(
     # Dummy descriptor
     edid[108:126] = [0x00, 0x00, 0x00, 0x10, 0x00] + [0x00] * 13
 
+    # A VIC mode can't be expressed as a DTD, so replace it with a dummy
+    # descriptor. The VIC is then the only mode the display advertises.
+    if vic is not None:
+        edid[54:72] = [0x00, 0x00, 0x00, 0x10, 0x00] + [0x00] * 13
+
     # Extension flag
     edid[126] = 1  # 1 extension block
 
@@ -173,6 +182,18 @@ def create_edid(
     edid[cea_start + 1] = 0x03  # Revision 3
 
     offset = cea_start + 4
+
+    if vic is not None:
+        # Video Data Block with a single SVD
+        edid[offset] = 0x41
+        edid[offset + 1] = vic
+        offset += 2
+
+        # YCbCr 4:2:0 Capability Map Data Block — SVD 1 also supports 4:2:0
+        edid[offset] = 0xE2
+        edid[offset + 1] = 0x0F  # Extended tag = YCbCr 4:2:0 Capability Map
+        edid[offset + 2] = 0x01
+        offset += 3
 
     if enable_hdr:
         # Colorimetry Data Block
@@ -207,6 +228,10 @@ def create_edid(
     edid[offset + 5] = 0x78  # Max TMDS: 600 MHz
     edid[offset + 6] = 0x00
     edid[offset + 7] = 0x00
+    if vic is not None:
+        edid[offset + 6] = 0x88  # SCDC present, scrambling (needed above 340 MHz)
+        if enable_hdr:
+            edid[offset + 7] = 0x01  # 10-bit YCbCr 4:2:0
     offset += 8
 
     # DTD offset
@@ -216,7 +241,7 @@ def create_edid(
     edid[cea_start + 3] = 0x70  # Underscan, Basic Audio, YCbCr 4:4:4
 
     # Duplicate DTD from base block
-    if offset + 18 <= 255:
+    if vic is None and offset + 18 <= 255:
         for i in range(18):
             edid[offset + i] = edid[54 + i]
         offset += 18

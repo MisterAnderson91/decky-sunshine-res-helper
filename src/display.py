@@ -16,7 +16,7 @@ from src.drm import (
 )
 
 log = logging.getLogger(__name__)
-from src.edid import create_edid, find_best_vic_resolution, get_pixel_clock_info
+from src.edid import create_edid, find_best_vic_resolution, find_exact_vic, get_pixel_clock_info
 from src import steam_settings
 
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
@@ -159,7 +159,13 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
     # Step 1: Generate custom EDID
     log.info("Step 1: Generating custom EDID...")
     pixel_clock_mhz, max_mhz, will_break = get_pixel_clock_info(width, height, refresh_rate)
-    if will_break:
+    exact_vic = find_exact_vic(width, height, refresh_rate) if will_break else None
+    if exact_vic:
+        log.info(
+            f"  {width}x{height}@{refresh_rate}Hz exceeds the {max_mhz:.0f} MHz DTD limit, "
+            f"advertising it as CTA VIC {exact_vic} (YCbCr 4:2:0 capable)"
+        )
+    elif will_break:
         vic_result = find_best_vic_resolution(width, height, refresh_rate)
         if vic_result:
             vic_width, vic_height, vic_refresh, vic_code, vic_name = vic_result
@@ -174,6 +180,7 @@ def connect(width: int, height: int, refresh_rate: int, device: str | None = Non
         refresh_rate=refresh_rate,
         enable_hdr=final_hdr,
         display_name="Virtual Display",
+        vic=exact_vic,
     )
     edid_file = SCRIPT_DIR / "custom_edid.bin"
     _ = edid_file.write_bytes(edid_data)

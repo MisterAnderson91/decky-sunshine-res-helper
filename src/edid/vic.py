@@ -4,6 +4,8 @@ CEA-861 Video Identification Code (VIC) standard resolutions and lookup.
 
 from __future__ import annotations
 
+import re
+
 # Format: VIC: (width, height, refresh_rate, name)
 VIC_RESOLUTIONS = {
     1: (640, 480, 60, "DMT0659"),
@@ -164,6 +166,25 @@ VIC_RESOLUTIONS = {
 
 
 VIC_RESOLUTIONS: dict[int, tuple[int, int, int, str]]
+
+
+def find_exact_vic(width: int, height: int, refresh_rate: int) -> int | None:
+    """
+    Find a progressive VIC that exactly matches the requested mode.
+    VICs are referenced by code in the CTA Video Data Block, so unlike a
+    detailed timing descriptor they are not bound by the 655.35 MHz limit.
+
+    Returns:
+        The VIC code, or None if no exact progressive match exists
+    """
+    for vic, (w, h, r, name) in VIC_RESOLUTIONS.items():
+        if (w, h, r) != (width, height, refresh_rate):
+            continue
+        if re.search(r"\d+i(\d|$|H)", name):  # interlaced, e.g. "1080i60"
+            continue
+        return vic
+
+    return None
 
 
 def find_best_vic_resolution(
